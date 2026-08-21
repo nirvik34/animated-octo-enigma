@@ -51,16 +51,18 @@ export function getLLMProviderConfig(providerOverride?: ProviderType): ProviderC
   }
 
   const rawBaseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-  const baseUrl = rawBaseUrl.endsWith("/api")
-    ? rawBaseUrl
-    : `${rawBaseUrl.replace(/\/$/, "")}/api`;
   const modelName = process.env.OLLAMA_MODEL || "llama3.2";
+  const normalizedBase = rawBaseUrl.replace(/\/$/, "").replace(/\/v1$/, "").replace(/\/api$/, "");
+  
+  const ollamaOpenAI = createOpenAI({
+    baseURL: `${normalizedBase}/v1`,
+    apiKey: "ollama",
+  });
 
-  const ollama = createOllama({ baseURL: baseUrl });
   return {
     provider: "ollama",
     modelName,
-    model: ollama(modelName),
+    model: ollamaOpenAI(modelName),
   };
 }
 

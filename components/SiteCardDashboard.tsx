@@ -2,35 +2,26 @@
 
 import React, { useState } from "react";
 import {
-  ShieldCheck,
-  Cpu,
-  Database,
-  Terminal,
-  Layers,
-  Sparkles,
   CheckCircle2,
   AlertTriangle,
-  FileText,
   Copy,
   Download,
   RefreshCw,
   Plus,
   Trash2,
-  Wrench,
-  DollarSign,
-  Calendar,
-  MapPin,
-  Building,
-  Activity,
   ArrowRight,
-  Info,
-  X,
   ChevronDown,
   ChevronUp,
-  Server,
-  Zap,
-  Sliders,
-  Maximize2
+  Edit3,
+  Check,
+  Wrench,
+  Building,
+  Calendar,
+  DollarSign,
+  AlertCircle,
+  FileText,
+  MoreVertical,
+  Briefcase
 } from "lucide-react";
 import { SiteInspection, DEFAULT_SITE_INSPECTION, EquipmentNote } from "@/types/inspection";
 import { ProviderType } from "@/lib/llm-provider";
@@ -109,9 +100,10 @@ export default function SiteCardDashboard() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeModelUsed, setActiveModelUsed] = useState<string>("OLLAMA (llama3.2)");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [themeVariant, setThemeVariant] = useState<"uber-light" | "uber-dark" | "uber-slate">("uber-light");
-  const [showGuideDrawer, setShowGuideDrawer] = useState<boolean>(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [selectedEquipmentForWorkOrder, setSelectedEquipmentForWorkOrder] = useState<EquipmentNote | null>(null);
+  const [workOrderCreatedCount, setWorkOrderCreatedCount] = useState<number>(0);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -143,6 +135,7 @@ export default function SiteCardDashboard() {
 
       setInspection(json.data);
       setActiveModelUsed(`${json.provider.toUpperCase()} (${json.modelName})`);
+      setIsEditing(false);
       showToast("Structured site inspection extracted successfully");
     } catch (err: any) {
       setErrorMsg(err.message || "An unexpected extraction error occurred.");
@@ -178,13 +171,18 @@ export default function SiteCardDashboard() {
     setInspection(DEFAULT_SITE_INSPECTION);
     setRawText(PRESET_NOTE_1);
     setErrorMsg(null);
+    setIsEditing(false);
     showToast("Reset to default sample data");
   };
 
-  const updateInspectionField = (
-    key: keyof SiteInspection,
-    value: any
-  ) => {
+  const handleCreateWorkOrder = (item?: EquipmentNote) => {
+    setWorkOrderCreatedCount((prev) => prev + 1);
+    const itemName = item ? item.name : "Inspection Actions";
+    showToast(`Work Order generated for ${itemName}`);
+    setSelectedEquipmentForWorkOrder(null);
+  };
+
+  const updateInspectionField = (key: keyof SiteInspection, value: any) => {
     setInspection((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -247,273 +245,208 @@ export default function SiteCardDashboard() {
     setInspection((prev) => ({ ...prev, nextSteps: list }));
   };
 
-  const getUrgencyBadgeStyle = (level: string) => {
-    switch (level) {
-      case "critical":
-        return "bg-black text-white border border-black";
-      case "high":
-        return "bg-neutral-900 text-white border border-neutral-900";
-      case "medium":
-        return "bg-[#efefef] text-black border border-neutral-300";
-      case "low":
-      default:
-        return "bg-[#f3f3f3] text-neutral-700 border border-neutral-200";
-    }
-  };
-
-  const getEquipmentStatusStyle = (status: string) => {
+  const getEquipmentStatusBadge = (status: string) => {
     switch (status) {
       case "replace":
-        return "bg-black text-white";
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#dd0000] text-white text-xs font-semibold">
+            <AlertTriangle className="w-3 h-3" />
+            Replace
+          </span>
+        );
       case "needs_repair":
-        return "bg-neutral-800 text-white";
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-100 text-amber-900 border border-amber-300 text-xs font-semibold">
+            <Wrench className="w-3 h-3 text-amber-700" />
+            Needs Repair
+          </span>
+        );
       case "operational":
-        return "bg-[#efefef] text-black border border-neutral-300";
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold">
+            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+            Operational
+          </span>
+        );
       case "unknown":
       default:
-        return "bg-[#f3f3f3] text-neutral-600 border border-neutral-200";
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-neutral-100 text-neutral-700 border border-neutral-200 text-xs font-medium">
+            Unknown
+          </span>
+        );
     }
   };
 
-  const getThemeClass = () => {
-    switch (themeVariant) {
-      case "uber-dark":
-        return "theme-uber-dark bg-black text-white";
-      case "uber-slate":
-        return "theme-uber-slate bg-slate-900 text-slate-100";
-      case "uber-light":
+  const getUrgencyBadge = (urgency: string) => {
+    switch (urgency?.toLowerCase()) {
+      case "critical":
+        return (
+          <span className="px-3 py-1 rounded-full bg-[#dd0000] text-white text-xs font-bold uppercase tracking-wider">
+            Critical Urgency
+          </span>
+        );
+      case "high":
+        return (
+          <span className="px-3 py-1 rounded-full bg-amber-500 text-white text-xs font-bold uppercase tracking-wider">
+            High Urgency
+          </span>
+        );
+      case "medium":
+        return (
+          <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-900 border border-blue-200 text-xs font-semibold uppercase tracking-wider">
+            Medium Urgency
+          </span>
+        );
+      case "low":
       default:
-        return "theme-uber-light bg-white text-black";
+        return (
+          <span className="px-3 py-1 rounded-full bg-neutral-100 text-neutral-700 border border-neutral-200 text-xs font-medium uppercase tracking-wider">
+            Low Urgency
+          </span>
+        );
     }
   };
 
   return (
-    <div className={`min-h-screen ${getThemeClass()} transition-colors duration-200`}>
+    <div className="min-h-screen bg-white text-[#0b0b0b]">
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-black text-white text-sm font-medium px-5 py-3 rounded-full uber-shadow-level-3 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3 duration-200">
-          <CheckCircle2 className="w-4 h-4 text-white" />
+        <div className="fixed bottom-6 right-6 z-50 bg-[#0b0b0b] text-white text-sm font-semibold px-5 py-3 rounded-full saniti-shadow-lift flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      <header className="border-b border-neutral-200 dark:border-neutral-800 sticky top-0 z-40 bg-white/90 dark:bg-black/90 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold tracking-tight font-sans">SitePulse</span>
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-black text-white dark:bg-white dark:text-black">
-                v2.0
-              </span>
-            </div>
-
-            <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
-              <span className="text-black dark:text-white cursor-pointer border-b-2 border-black dark:border-white pb-1">
-                Parse Logs
-              </span>
-              <span className="text-neutral-500 hover:text-black dark:hover:text-white cursor-pointer transition-colors">
-                Live Schemas
-              </span>
-              <span className="text-neutral-500 hover:text-black dark:hover:text-white cursor-pointer transition-colors">
-                LLM Benchmark
-              </span>
-              <span className="text-neutral-500 hover:text-black dark:hover:text-white cursor-pointer transition-colors">
-                Enterprise
-              </span>
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowGuideDrawer(true)}
-              className="flex items-center gap-1.5 text-xs font-medium px-3.5 py-2 rounded-full bg-[#efefef] dark:bg-neutral-800 text-black dark:text-white hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
-            >
-              <Info className="w-3.5 h-3.5" />
-              <span>Uber Design Spec</span>
-            </button>
-
-            <div className="flex items-center bg-[#efefef] dark:bg-neutral-800 p-1 rounded-full text-xs font-medium">
+      {selectedEquipmentForWorkOrder && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-neutral-200 rounded-2xl p-6 max-w-md w-full space-y-4 saniti-shadow-lift animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+              <h3 className="font-bold text-base text-[#0b0b0b]">Generate Work Order</h3>
               <button
-                onClick={() => setThemeVariant("uber-light")}
-                className={`px-3 py-1 rounded-full transition-all ${
-                  themeVariant === "uber-light"
-                    ? "bg-black text-white shadow-sm"
-                    : "text-neutral-600 dark:text-neutral-400"
-                }`}
+                onClick={() => setSelectedEquipmentForWorkOrder(null)}
+                className="text-xs text-neutral-400 hover:text-black font-semibold"
               >
-                Light
-              </button>
-              <button
-                onClick={() => setThemeVariant("uber-dark")}
-                className={`px-3 py-1 rounded-full transition-all ${
-                  themeVariant === "uber-dark"
-                    ? "bg-white text-black shadow-sm"
-                    : "text-neutral-600 dark:text-neutral-400"
-                }`}
-              >
-                Dark
-              </button>
-              <button
-                onClick={() => setThemeVariant("uber-slate")}
-                className={`px-3 py-1 rounded-full transition-all ${
-                  themeVariant === "uber-slate"
-                    ? "bg-white text-black shadow-sm"
-                    : "text-neutral-600 dark:text-neutral-400"
-                }`}
-              >
-                Slate
+                Close
               </button>
             </div>
-
-            <button className="hidden sm:inline-flex text-xs font-medium px-4 py-2 rounded-full bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 transition-colors">
-              Sign up
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {showGuideDrawer && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-xl bg-white dark:bg-neutral-900 text-black dark:text-white h-full overflow-y-auto p-8 flex flex-col justify-between shadow-2xl">
-            <div>
-              <div className="flex items-center justify-between pb-6 border-b border-neutral-200 dark:border-neutral-800">
-                <div>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
-                    SYSTEM SPECIFICATION
-                  </span>
-                  <h2 className="text-2xl font-bold mt-1">Uber Design System</h2>
-                </div>
-                <button
-                  onClick={() => setShowGuideDrawer(false)}
-                  className="w-8 h-8 rounded-full bg-[#efefef] dark:bg-neutral-800 flex items-center justify-center text-black dark:text-white hover:bg-neutral-200 dark:hover:bg-neutral-700"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="mt-6 space-y-6 text-sm">
-                <div className="p-4 rounded-2xl bg-[#efefef] dark:bg-neutral-800 space-y-2">
-                  <h3 className="font-bold text-base">Black & White Duet</h3>
-                  <p className="text-neutral-600 dark:text-neutral-300 leading-relaxed">
-                    Restraint over accent slop. Primary conversion targets use Ink Black (#000000) on light canvas (#ffffff). Zero third accent colors.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[#efefef] dark:bg-neutral-800 space-y-2">
-                  <h3 className="font-bold text-base">Pill Signature</h3>
-                  <p className="text-neutral-600 dark:text-neutral-300 leading-relaxed">
-                    Interactive controls round to 999px pill shapes. Form tab toggles use 36px pill-tabs. Cards and surfaces round to 16px rounded-2xl.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[#efefef] dark:bg-neutral-800 space-y-2">
-                  <h3 className="font-bold text-base">Sentence-Case Typography</h3>
-                  <p className="text-neutral-600 dark:text-neutral-300 leading-relaxed">
-                    Headlines set in weight 700 with tight 1.22-1.25 line-heights. No all-caps display headlines. Body copy set in weights 400 and 500.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[#efefef] dark:bg-neutral-800 space-y-2">
-                  <h3 className="font-bold text-base">Polarity-Flip Mid Bands</h3>
-                  <p className="text-neutral-600 dark:text-neutral-300 leading-relaxed">
-                    Pure black bands appear mid-page to create structural depth and contrast rhythm between light feature sections.
-                  </p>
-                </div>
-              </div>
+            <p className="text-xs text-neutral-600 leading-relaxed">
+              Create an urgent maintenance work order for:
+            </p>
+            <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 text-xs space-y-1">
+              <div className="font-bold text-[#0b0b0b]">{selectedEquipmentForWorkOrder.name}</div>
+              <div className="text-neutral-500">Status: {selectedEquipmentForWorkOrder.status}</div>
+              <div className="text-neutral-600">{selectedEquipmentForWorkOrder.remarks}</div>
             </div>
-
-            <div className="pt-6 border-t border-neutral-200 dark:border-neutral-800">
+            <div className="pt-2 flex justify-end gap-2">
               <button
-                onClick={() => setShowGuideDrawer(false)}
-                className="w-full py-3 rounded-full bg-black text-white dark:bg-white dark:text-black font-semibold text-sm hover:opacity-90 transition-opacity"
+                onClick={() => setSelectedEquipmentForWorkOrder(null)}
+                className="px-4 py-2 text-xs font-semibold rounded-full bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
               >
-                Close Spec Drawer
+                Cancel
+              </button>
+              <button
+                onClick={() => handleCreateWorkOrder(selectedEquipmentForWorkOrder)}
+                className="px-4 py-2 text-xs font-bold rounded-full bg-[#0b0b0b] text-white hover:bg-neutral-800"
+              >
+                Confirm Work Order
               </button>
             </div>
           </div>
         </div>
       )}
 
-      <section className="max-w-7xl mx-auto px-6 pt-12 pb-16">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-          <div className="lg:col-span-6 space-y-6">
-            <span className="text-xs font-bold uppercase tracking-widest text-neutral-500">
-              INDUSTRIAL LOGISTICS & INSPECTION
+      <header className="border-b border-neutral-200 sticky top-0 z-40 bg-white/90 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl font-bold tracking-tight flex items-center gap-1.5 text-[#0b0b0b]">
+              Saniti<span className="w-2 h-2 rounded-full bg-[#0b0b0b]"></span>
             </span>
-            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-black dark:text-white leading-[1.22]">
-              Go anywhere with SitePulse AI
-            </h1>
-            <p className="text-lg text-neutral-600 dark:text-neutral-300 max-w-xl leading-relaxed">
-              Convert unstructured field notes, emergency voice transcripts, and maintenance emails into clean, schema-validated inspection cards instantly.
-            </p>
+            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-neutral-100 text-neutral-800 border border-neutral-200">
+              Enterprise v2.1
+            </span>
+          </div>
 
-            <div className="pt-4 flex flex-wrap items-center gap-3">
-              <span className="text-xs font-semibold text-neutral-500">Sample presets:</span>
+          <div className="flex items-center gap-3">
+            {workOrderCreatedCount > 0 && (
+              <span className="text-xs font-semibold px-3 py-1 rounded-full bg-neutral-100 text-neutral-700 border border-neutral-200">
+                {workOrderCreatedCount} Work Order{workOrderCreatedCount > 1 ? "s" : ""} Dispatched
+              </span>
+            )}
+            <span className="text-xs font-mono text-neutral-500 uppercase tracking-wider font-medium">
+              Inspection Review
+            </span>
+          </div>
+        </div>
+      </header>
+
+      <section className="max-w-7xl mx-auto px-6 pt-10 pb-12">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+          <div className="lg:col-span-5 space-y-6">
+            <div>
+              <span className="mono-eyebrow text-neutral-500">
+                INSPECTION INTELLIGENCE ENGINE
+              </span>
+              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#0b0b0b] leading-[1.2] mt-2">
+                Unstructured Notes to Operational Records
+              </h1>
+              <p className="text-sm text-neutral-600 mt-2 leading-relaxed">
+                Parse raw field notes into schema-validated, actionable inspection reviews for engineering and maintenance teams.
+              </p>
+            </div>
+
+            <div className="pt-2 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-neutral-500 w-full mb-1">Select sample report:</span>
               <button
                 onClick={() => setRawText(PRESET_NOTE_1)}
-                className="text-xs font-medium px-4 py-2 rounded-full bg-[#efefef] dark:bg-neutral-800 text-black dark:text-white hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
+                className="text-xs font-medium px-3.5 py-1.5 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-800 hover:bg-neutral-200 transition-colors"
               >
                 Apex Chiller
               </button>
               <button
                 onClick={() => setRawText(PRESET_NOTE_2)}
-                className="text-xs font-medium px-4 py-2 rounded-full bg-[#efefef] dark:bg-neutral-800 text-black dark:text-white hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
+                className="text-xs font-medium px-3.5 py-1.5 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-800 hover:bg-neutral-200 transition-colors"
               >
                 Petrochem Hazard
               </button>
               <button
                 onClick={() => setRawText(PRESET_NOTE_3)}
-                className="text-xs font-medium px-4 py-2 rounded-full bg-[#efefef] dark:bg-neutral-800 text-black dark:text-white hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
+                className="text-xs font-medium px-3.5 py-1.5 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-800 hover:bg-neutral-200 transition-colors"
               >
                 Skyline Audit
               </button>
             </div>
-
-            <div className="grid grid-cols-3 gap-4 pt-6 border-t border-neutral-200 dark:border-neutral-800">
-              <div>
-                <div className="text-2xl font-bold">100%</div>
-                <div className="text-xs text-neutral-500 mt-0.5">Schema Validation</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold">&lt; 2s</div>
-                <div className="text-xs text-neutral-500 mt-0.5">Local Extraction</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold">Zero</div>
-                <div className="text-xs text-neutral-500 mt-0.5">Color Slop</div>
-              </div>
-            </div>
           </div>
 
-          <div className="lg:col-span-6">
-            <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-6 uber-shadow-level-2 space-y-5">
-              <div className="flex items-center justify-between pb-3 border-b border-neutral-100 dark:border-neutral-800">
-                <div className="flex items-center bg-[#efefef] dark:bg-neutral-800 p-1 rounded-[36px]">
+          <div className="lg:col-span-7">
+            <div className="bg-white border border-neutral-200 rounded-2xl p-6 saniti-shadow-lift space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
+                <div className="flex items-center bg-neutral-100 border border-neutral-200 p-1 rounded-full">
                   <button
                     onClick={() => setProvider("ollama")}
-                    className={`px-4 py-1.5 rounded-[36px] text-xs font-semibold transition-all ${
+                    className={`px-3.5 py-1 rounded-full text-xs font-semibold transition-all ${
                       provider === "ollama"
-                        ? "bg-black text-white shadow-sm"
-                        : "text-neutral-600 dark:text-neutral-400"
+                        ? "bg-[#0b0b0b] text-white shadow-sm"
+                        : "text-neutral-600 hover:text-black"
                     }`}
                   >
                     Ollama (Local)
                   </button>
                   <button
                     onClick={() => setProvider("openai")}
-                    className={`px-4 py-1.5 rounded-[36px] text-xs font-semibold transition-all ${
+                    className={`px-3.5 py-1 rounded-full text-xs font-semibold transition-all ${
                       provider === "openai"
-                        ? "bg-black text-white shadow-sm"
-                        : "text-neutral-600 dark:text-neutral-400"
+                        ? "bg-[#0b0b0b] text-white shadow-sm"
+                        : "text-neutral-600 hover:text-black"
                     }`}
                   >
                     OpenAI
                   </button>
                   <button
                     onClick={() => setProvider("google")}
-                    className={`px-4 py-1.5 rounded-[36px] text-xs font-semibold transition-all ${
+                    className={`px-3.5 py-1 rounded-full text-xs font-semibold transition-all ${
                       provider === "google"
-                        ? "bg-black text-white shadow-sm"
-                        : "text-neutral-600 dark:text-neutral-400"
+                        ? "bg-[#0b0b0b] text-white shadow-sm"
+                        : "text-neutral-600 hover:text-black"
                     }`}
                   >
                     Google
@@ -526,49 +459,49 @@ export default function SiteCardDashboard() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300 mb-2">
-                  Unstructured Field Notes / Transcript Input
+                <label className="block text-xs font-bold text-neutral-700 mb-2">
+                  Unstructured Field Log / Notes Input
                 </label>
                 <textarea
                   value={rawText}
                   onChange={(e) => setRawText(e.target.value)}
-                  rows={7}
+                  rows={6}
                   placeholder="Paste unstructured site inspection notes, voice transcriptions, or emergency reports here..."
-                  className="w-full bg-[#efefef] dark:bg-neutral-800 border-0 rounded-lg p-4 text-xs font-mono text-black dark:text-white placeholder:text-neutral-400 focus:ring-2 focus:ring-black dark:focus:ring-white outline-none resize-none"
+                  className="w-full bg-neutral-50 border border-neutral-200 rounded-lg p-3.5 text-xs font-mono text-neutral-900 placeholder:text-neutral-400 focus:bg-white focus:ring-2 focus:ring-black focus:border-black outline-none resize-none"
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center justify-between gap-3 pt-1">
                 <button
                   onClick={handleReset}
-                  className="text-xs font-semibold px-4 py-2.5 rounded-full bg-[#efefef] dark:bg-neutral-800 text-black dark:text-white hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
+                  className="text-xs font-semibold px-4 py-2 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-700 hover:bg-neutral-200 transition-colors"
                 >
-                  Clear Input
+                  Clear
                 </button>
 
                 <button
                   onClick={handleParse}
                   disabled={loading || !rawText.trim()}
-                  className="flex-1 py-3 px-6 rounded-full bg-black text-white dark:bg-white dark:text-black font-semibold text-sm hover:opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                  className="flex-1 py-2.5 px-6 rounded-full bg-[#0b0b0b] text-white font-bold text-xs hover:bg-neutral-800 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-sm"
                 >
                   {loading ? (
                     <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Extracting Structured Data...</span>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Processing Log...</span>
                     </>
                   ) : (
                     <>
-                      <span>Extract Site Data</span>
-                      <ArrowRight className="w-4 h-4" />
+                      <span>Extract Inspection Record</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
                     </>
                   )}
                 </button>
               </div>
 
               {errorMsg && (
-                <div className="p-4 rounded-lg bg-black text-white text-xs space-y-1">
+                <div className="p-3.5 rounded-lg bg-[#dd0000] text-white text-xs space-y-1">
                   <div className="font-bold flex items-center gap-1.5">
-                    <AlertTriangle className="w-4 h-4" />
+                    <AlertTriangle className="w-4 h-4 text-white" />
                     <span>Extraction Error</span>
                   </div>
                   <p className="opacity-90 leading-relaxed">{errorMsg}</p>
@@ -579,199 +512,281 @@ export default function SiteCardDashboard() {
         </div>
       </section>
 
-      <section className="bg-black text-white py-16 my-8">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
-            <div className="md:col-span-8 space-y-4">
-              <span className="text-xs font-bold uppercase tracking-widest text-neutral-400">
-                WHY CHOOSE SITEPULSE
-              </span>
-              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight leading-tight">
-                Engineering-grade data extraction for urban and industrial logistics
-              </h2>
-              <p className="text-neutral-400 text-sm max-w-2xl leading-relaxed">
-                SitePulse removes manual inspection re-keying by enforcing strict Zod typing, multi-provider resiliency, and clean output formatting.
-              </p>
-            </div>
-            <div className="md:col-span-4 flex justify-start md:justify-end">
-              <button
-                onClick={() => setShowGuideDrawer(true)}
-                className="px-6 py-3.5 rounded-full bg-white text-black font-semibold text-sm hover:bg-neutral-100 transition-colors inline-flex items-center gap-2"
-              >
-                <span>Explore Schema Spec</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="max-w-7xl mx-auto px-6 py-12">
-        <div className="flex items-center justify-between pb-6 border-b border-neutral-200 dark:border-neutral-800">
+      <section className="max-w-7xl mx-auto px-6 py-10 border-t border-neutral-200">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-neutral-200">
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">
-              STRUCTURED OUTPUT
-            </span>
-            <h2 className="text-2xl font-bold tracking-tight mt-1">Extracted Site Card Dashboard</h2>
+            <div className="flex items-center gap-3">
+              <span className="mono-eyebrow text-neutral-500">INSPECTION RECORD</span>
+              {getUrgencyBadge(inspection.urgencyLevel)}
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight text-[#0b0b0b] mt-1">
+              {inspection.clientName || "Unnamed Inspection"}
+            </h2>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setIsEditing(!isEditing)}
+              className={`flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-full border transition-colors ${
+                isEditing
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+                  : "bg-neutral-100 text-neutral-800 border-neutral-200 hover:bg-neutral-200"
+              }`}
+            >
+              {isEditing ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Done Editing</span>
+                </>
+              ) : (
+                <>
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Edit Record</span>
+                </>
+              )}
+            </button>
+
             <button
               onClick={handleCopyJson}
-              className="flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-full bg-[#efefef] dark:bg-neutral-800 text-black dark:text-white hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-800 hover:bg-neutral-200 transition-colors"
             >
               <Copy className="w-3.5 h-3.5" />
               <span>Copy JSON</span>
             </button>
+
             <button
               onClick={handleDownloadJson}
-              className="flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-full bg-black text-white dark:bg-white dark:text-black hover:opacity-90 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-800 hover:bg-neutral-200 transition-colors"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Download JSON</span>
+            </button>
+
+            <button
+              onClick={() => handleCreateWorkOrder()}
+              className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-full bg-[#0b0b0b] text-white hover:bg-neutral-800 transition-colors shadow-sm"
+            >
+              <Briefcase className="w-3.5 h-3.5" />
+              <span>Dispatch Work Order</span>
             </button>
           </div>
         </div>
 
         <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-4 space-y-6">
-            <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-6 uber-shadow-level-1 space-y-4">
-              <h3 className="font-bold text-base border-b border-neutral-100 dark:border-neutral-800 pb-3">
-                General Site Details
-              </h3>
-
-              <div>
-                <label className="block text-xs font-semibold text-neutral-500 mb-1">Client Name</label>
-                <input
-                  type="text"
-                  value={inspection.clientName}
-                  onChange={(e) => updateInspectionField("clientName", e.target.value)}
-                  className="w-full bg-[#efefef] dark:bg-neutral-800 border-0 rounded-lg p-2.5 text-xs font-medium text-black dark:text-white focus:ring-1 focus:ring-black outline-none"
-                />
+            <div className="bg-white border border-neutral-200 rounded-2xl p-6 saniti-shadow-lift space-y-4">
+              <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+                <h3 className="font-bold text-sm text-[#0b0b0b] uppercase tracking-wider">
+                  Site & Metadata
+                </h3>
+                {isEditing && (
+                  <span className="text-[10px] uppercase font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                    Edit Mode
+                  </span>
+                )}
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-neutral-500 mb-1">Site Address</label>
-                <input
-                  type="text"
-                  value={inspection.siteAddress}
-                  onChange={(e) => updateInspectionField("siteAddress", e.target.value)}
-                  className="w-full bg-[#efefef] dark:bg-neutral-800 border-0 rounded-lg p-2.5 text-xs font-medium text-black dark:text-white focus:ring-1 focus:ring-black outline-none"
-                />
-              </div>
+              {isEditing ? (
+                <div className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-600 mb-1">Client Name</label>
+                    <input
+                      type="text"
+                      value={inspection.clientName}
+                      onChange={(e) => updateInspectionField("clientName", e.target.value)}
+                      className="w-full bg-neutral-50 border border-neutral-200 rounded-lg p-2 text-xs font-medium text-neutral-900 focus:bg-white focus:ring-1 focus:ring-black outline-none"
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-500 mb-1">Date</label>
-                  <input
-                    type="text"
-                    value={inspection.inspectionDate}
-                    onChange={(e) => updateInspectionField("inspectionDate", e.target.value)}
-                    className="w-full bg-[#efefef] dark:bg-neutral-800 border-0 rounded-lg p-2.5 text-xs font-medium text-black dark:text-white focus:ring-1 focus:ring-black outline-none"
-                  />
-                </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-600 mb-1">Site Address</label>
+                    <input
+                      type="text"
+                      value={inspection.siteAddress}
+                      onChange={(e) => updateInspectionField("siteAddress", e.target.value)}
+                      className="w-full bg-neutral-50 border border-neutral-200 rounded-lg p-2 text-xs font-medium text-neutral-900 focus:bg-white focus:ring-1 focus:ring-black outline-none"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-500 mb-1">Urgency</label>
-                  <select
-                    value={inspection.urgencyLevel}
-                    onChange={(e) => updateInspectionField("urgencyLevel", e.target.value)}
-                    className="w-full bg-[#efefef] dark:bg-neutral-800 border-0 rounded-lg p-2.5 text-xs font-medium text-black dark:text-white focus:ring-1 focus:ring-black outline-none"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
-                  </select>
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-neutral-600 mb-1">Date</label>
+                      <input
+                        type="text"
+                        value={inspection.inspectionDate}
+                        onChange={(e) => updateInspectionField("inspectionDate", e.target.value)}
+                        className="w-full bg-neutral-50 border border-neutral-200 rounded-lg p-2 text-xs font-medium text-neutral-900 focus:bg-white focus:ring-1 focus:ring-black outline-none"
+                      />
+                    </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-500 mb-1">Estimated Budget</label>
-                  <input
-                    type="number"
-                    value={inspection.budgetEstimate ?? ""}
-                    onChange={(e) => updateInspectionField("budgetEstimate", e.target.value ? Number(e.target.value) : null)}
-                    className="w-full bg-[#efefef] dark:bg-neutral-800 border-0 rounded-lg p-2.5 text-xs font-medium text-black dark:text-white focus:ring-1 focus:ring-black outline-none"
-                  />
-                </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-neutral-600 mb-1">Urgency</label>
+                      <select
+                        value={inspection.urgencyLevel}
+                        onChange={(e) => updateInspectionField("urgencyLevel", e.target.value)}
+                        className="w-full bg-neutral-50 border border-neutral-200 rounded-lg p-2 text-xs font-medium text-neutral-900 focus:bg-white focus:ring-1 focus:ring-black outline-none"
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                      </select>
+                    </div>
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-500 mb-1">Currency</label>
-                  <input
-                    type="text"
-                    value={inspection.currency}
-                    onChange={(e) => updateInspectionField("currency", e.target.value)}
-                    className="w-full bg-[#efefef] dark:bg-neutral-800 border-0 rounded-lg p-2.5 text-xs font-medium text-black dark:text-white focus:ring-1 focus:ring-black outline-none"
-                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-neutral-600 mb-1">Est. Budget</label>
+                      <input
+                        type="number"
+                        value={inspection.budgetEstimate ?? ""}
+                        onChange={(e) => updateInspectionField("budgetEstimate", e.target.value ? Number(e.target.value) : null)}
+                        className="w-full bg-neutral-50 border border-neutral-200 rounded-lg p-2 text-xs font-medium text-neutral-900 focus:bg-white focus:ring-1 focus:ring-black outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-neutral-600 mb-1">Currency</label>
+                      <input
+                        type="text"
+                        value={inspection.currency}
+                        onChange={(e) => updateInspectionField("currency", e.target.value)}
+                        className="w-full bg-neutral-50 border border-neutral-200 rounded-lg p-2 text-xs font-medium text-neutral-900 focus:bg-white focus:ring-1 focus:ring-black outline-none"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <Building className="w-4 h-4 text-neutral-400 mt-0.5 shrink-0" />
+                    <div>
+                      <div className="text-xs text-neutral-500 font-medium">Client</div>
+                      <div className="text-xs font-bold text-neutral-900">{inspection.clientName || "—"}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <FileText className="w-4 h-4 text-neutral-400 mt-0.5 shrink-0" />
+                    <div>
+                      <div className="text-xs text-neutral-500 font-medium">Location</div>
+                      <div className="text-xs font-medium text-neutral-800 leading-relaxed">{inspection.siteAddress || "—"}</div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 pt-2 border-t border-neutral-100">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-3.5 h-3.5 text-neutral-400" />
+                      <div>
+                        <div className="text-[10px] text-neutral-500 font-medium">Inspection Date</div>
+                        <div className="text-xs font-semibold text-neutral-800">{inspection.inspectionDate || "—"}</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="w-3.5 h-3.5 text-neutral-400" />
+                      <div>
+                        <div className="text-[10px] text-neutral-500 font-medium">Est. Budget</div>
+                        <div className="text-xs font-semibold text-neutral-800">
+                          {inspection.budgetEstimate ? `${inspection.currency} ${inspection.budgetEstimate.toLocaleString()}` : "N/A"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-6 uber-shadow-level-1 space-y-3">
-              <h3 className="font-bold text-base">Active Model Engine</h3>
+            <div className="bg-white border border-neutral-200 rounded-2xl p-5 saniti-shadow-lift space-y-2">
+              <div className="text-xs font-bold text-neutral-700">AI Extraction Metadata</div>
               <p className="text-xs text-neutral-500 leading-relaxed">
-                Currently parsed using <span className="font-semibold text-black dark:text-white">{activeModelUsed}</span>.
+                Parsed using <span className="font-semibold text-neutral-900">{activeModelUsed}</span>. Schema validation passed.
               </p>
             </div>
           </div>
 
           <div className="lg:col-span-8 space-y-6">
-            <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-6 uber-shadow-level-1 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-neutral-100 dark:border-neutral-800">
+            <div className="bg-white border border-neutral-200 rounded-2xl p-6 saniti-shadow-lift space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
                 <div className="flex items-center gap-3">
-                  <h3 className="font-bold text-base">Equipment Notes</h3>
-                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#efefef] dark:bg-neutral-800 text-black dark:text-white">
-                    {inspection.equipmentNotes.length} items
+                  <h3 className="font-bold text-sm text-[#0b0b0b] uppercase tracking-wider">
+                    Equipment Status Overview
+                  </h3>
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-800">
+                    {inspection.equipmentNotes.length} recorded
                   </span>
                 </div>
-                <button
-                  onClick={addEquipment}
-                  className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full bg-black text-white dark:bg-white dark:text-black hover:opacity-90 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Equipment</span>
-                </button>
+                {isEditing && (
+                  <button
+                    onClick={addEquipment}
+                    className="flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-800 hover:bg-neutral-200 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Item</span>
+                  </button>
+                )}
               </div>
 
               <div className="space-y-3">
                 {inspection.equipmentNotes.length === 0 ? (
-                  <p className="text-xs text-neutral-400 py-4 text-center">No equipment items recorded.</p>
+                  <p className="text-xs text-neutral-500 py-4 text-center">No equipment items recorded.</p>
                 ) : (
                   inspection.equipmentNotes.map((item, idx) => (
-                    <div key={idx} className="p-4 rounded-xl bg-[#efefef] dark:bg-neutral-800 space-y-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <input
-                          type="text"
-                          value={item.name}
-                          onChange={(e) => updateEquipment(idx, { ...item, name: e.target.value })}
-                          className="font-bold text-xs bg-white dark:bg-neutral-900 border-0 rounded-md px-2.5 py-1.5 flex-1 outline-none text-black dark:text-white"
-                        />
-                        <select
-                          value={item.status}
-                          onChange={(e) => updateEquipment(idx, { ...item, status: e.target.value as any })}
-                          className={`text-xs font-semibold px-3 py-1.5 rounded-full border-0 outline-none ${getEquipmentStatusStyle(item.status)}`}
-                        >
-                          <option value="operational">Operational</option>
-                          <option value="needs_repair">Needs Repair</option>
-                          <option value="replace">Replace</option>
-                          <option value="unknown">Unknown</option>
-                        </select>
-                        <button
-                          onClick={() => removeEquipment(idx)}
-                          className="w-7 h-7 rounded-full bg-white dark:bg-neutral-900 flex items-center justify-center text-neutral-400 hover:text-black dark:hover:text-white transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                    <div key={idx} className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 space-y-2">
+                      {isEditing ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <input
+                              type="text"
+                              value={item.name}
+                              onChange={(e) => updateEquipment(idx, { ...item, name: e.target.value })}
+                              className="font-bold text-xs bg-white border border-neutral-200 rounded-md px-2.5 py-1.5 flex-1 outline-none text-neutral-900 focus:border-black"
+                            />
+                            <select
+                              value={item.status}
+                              onChange={(e) => updateEquipment(idx, { ...item, status: e.target.value as any })}
+                              className="text-xs font-semibold px-3 py-1.5 rounded-md border border-neutral-200 bg-white outline-none"
+                            >
+                              <option value="operational">Operational</option>
+                              <option value="needs_repair">Needs Repair</option>
+                              <option value="replace">Replace</option>
+                              <option value="unknown">Unknown</option>
+                            </select>
+                            <button
+                              onClick={() => removeEquipment(idx)}
+                              className="w-7 h-7 rounded-full bg-white border border-neutral-200 flex items-center justify-center text-neutral-400 hover:text-red-600 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <input
+                            type="text"
+                            value={item.remarks}
+                            onChange={(e) => updateEquipment(idx, { ...item, remarks: e.target.value })}
+                            className="w-full text-xs text-neutral-700 bg-white border border-neutral-200 rounded-md px-2.5 py-1.5 outline-none focus:border-black"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="space-y-1 flex-1">
+                            <div className="flex items-center gap-2.5">
+                              <span className="font-bold text-xs text-neutral-900">{item.name}</span>
+                              {getEquipmentStatusBadge(item.status)}
+                            </div>
+                            <p className="text-xs text-neutral-600 leading-relaxed">{item.remarks}</p>
+                          </div>
 
-                      <input
-                        type="text"
-                        value={item.remarks}
-                        onChange={(e) => updateEquipment(idx, { ...item, remarks: e.target.value })}
-                        className="w-full text-xs text-neutral-600 dark:text-neutral-300 bg-white dark:bg-neutral-900 border-0 rounded-md px-2.5 py-1.5 outline-none"
-                      />
+                          {(item.status === "replace" || item.status === "needs_repair") && (
+                            <button
+                              onClick={() => setSelectedEquipmentForWorkOrder(item)}
+                              className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-full bg-white border border-neutral-300 text-neutral-800 hover:bg-neutral-100 transition-colors flex items-center gap-1.5 shadow-2xs"
+                            >
+                              <Wrench className="w-3 h-3 text-neutral-600" />
+                              <span>Work Order</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
@@ -779,63 +794,91 @@ export default function SiteCardDashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-6 uber-shadow-level-1 space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-neutral-100 dark:border-neutral-800">
-                  <h3 className="font-bold text-base">Key Observations</h3>
-                  <button
-                    onClick={addObservation}
-                    className="w-7 h-7 rounded-full bg-black text-white dark:bg-white dark:text-black flex items-center justify-center hover:opacity-90"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
+              <div className="bg-white border border-neutral-200 rounded-2xl p-6 saniti-shadow-lift space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
+                  <h3 className="font-bold text-sm text-[#0b0b0b] uppercase tracking-wider">
+                    Key Observations
+                  </h3>
+                  {isEditing && (
+                    <button
+                      onClick={addObservation}
+                      className="w-6 h-6 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-800 flex items-center justify-center hover:bg-neutral-200 font-bold"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {inspection.keyObservations.map((obs, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={obs}
-                        onChange={(e) => updateObservation(idx, e.target.value)}
-                        className="w-full text-xs bg-[#efefef] dark:bg-neutral-800 border-0 rounded-lg p-2.5 text-black dark:text-white outline-none"
-                      />
-                      <button
-                        onClick={() => removeObservation(idx)}
-                        className="w-8 h-8 rounded-full bg-[#efefef] dark:bg-neutral-800 flex items-center justify-center text-neutral-400 hover:text-black dark:hover:text-white shrink-0"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    <div key={idx} className="flex items-start gap-2.5">
+                      {isEditing ? (
+                        <>
+                          <input
+                            type="text"
+                            value={obs}
+                            onChange={(e) => updateObservation(idx, e.target.value)}
+                            className="w-full text-xs bg-neutral-50 border border-neutral-200 rounded-lg p-2 text-neutral-900 outline-none focus:bg-white focus:border-black"
+                          />
+                          <button
+                            onClick={() => removeObservation(idx)}
+                            className="w-7 h-7 rounded-full bg-white flex items-center justify-center text-neutral-400 hover:text-red-600 shrink-0 border border-neutral-200 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      ) : (
+                        <div className="flex items-start gap-2 text-xs text-neutral-700 leading-relaxed">
+                          <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-1.5 shrink-0"></span>
+                          <span>{obs}</span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-6 uber-shadow-level-1 space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-neutral-100 dark:border-neutral-800">
-                  <h3 className="font-bold text-base">Recommended Next Steps</h3>
-                  <button
-                    onClick={addNextStep}
-                    className="w-7 h-7 rounded-full bg-black text-white dark:bg-white dark:text-black flex items-center justify-center hover:opacity-90"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
+              <div className="bg-white border border-neutral-200 rounded-2xl p-6 saniti-shadow-lift space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
+                  <h3 className="font-bold text-sm text-[#0b0b0b] uppercase tracking-wider">
+                    Action Plan & Next Steps
+                  </h3>
+                  {isEditing && (
+                    <button
+                      onClick={addNextStep}
+                      className="w-6 h-6 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-800 flex items-center justify-center hover:bg-neutral-200 font-bold"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {inspection.nextSteps.map((step, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={step}
-                        onChange={(e) => updateNextStep(idx, e.target.value)}
-                        className="w-full text-xs bg-[#efefef] dark:bg-neutral-800 border-0 rounded-lg p-2.5 text-black dark:text-white outline-none"
-                      />
-                      <button
-                        onClick={() => removeNextStep(idx)}
-                        className="w-8 h-8 rounded-full bg-[#efefef] dark:bg-neutral-800 flex items-center justify-center text-neutral-400 hover:text-black dark:hover:text-white shrink-0"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    <div key={idx} className="flex items-start gap-2.5">
+                      {isEditing ? (
+                        <>
+                          <input
+                            type="text"
+                            value={step}
+                            onChange={(e) => updateNextStep(idx, e.target.value)}
+                            className="w-full text-xs bg-neutral-50 border border-neutral-200 rounded-lg p-2 text-neutral-900 outline-none focus:bg-white focus:border-black"
+                          />
+                          <button
+                            onClick={() => removeNextStep(idx)}
+                            className="w-7 h-7 rounded-full bg-white flex items-center justify-center text-neutral-400 hover:text-red-600 shrink-0 border border-neutral-200 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      ) : (
+                        <div className="flex items-start gap-2 text-xs text-neutral-800 font-medium leading-relaxed">
+                          <span className="w-4 h-4 rounded-full bg-neutral-100 border border-neutral-300 text-neutral-600 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                            {idx + 1}
+                          </span>
+                          <span>{step}</span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -845,21 +888,21 @@ export default function SiteCardDashboard() {
         </div>
       </section>
 
-      <section className="max-w-7xl mx-auto px-6 py-16 border-t border-neutral-200 dark:border-neutral-800">
+      <section className="max-w-7xl mx-auto px-6 py-12 border-t border-neutral-200">
         <div className="max-w-3xl mx-auto space-y-6">
           <div className="text-center space-y-2">
-            <span className="text-xs font-bold uppercase tracking-widest text-neutral-500">FAQ</span>
-            <h2 className="text-3xl font-bold">Frequently asked questions</h2>
+            <span className="mono-eyebrow text-neutral-500">FAQ</span>
+            <h2 className="text-2xl font-bold text-[#0b0b0b] tracking-tight">Frequently asked questions</h2>
           </div>
 
-          <div className="divide-y divide-neutral-200 dark:divide-neutral-800 pt-6">
+          <div className="divide-y divide-neutral-200 pt-4">
             {[
               {
-                q: "How does SitePulse AI handle unstructured field notes?",
-                a: "SitePulse passes raw inspection text into language models configured with a strict Zod JSON schema, extracting client names, equipment status, budget estimates, and urgent action items automatically."
+                q: "How does Saniti AI handle unstructured field notes?",
+                a: "Saniti passes raw inspection text into language models configured with a strict Zod JSON schema, extracting client names, equipment status, budget estimates, and urgent action items automatically."
               },
               {
-                q: "Can I run SitePulse completely offline?",
+                q: "Can I run Saniti completely offline?",
                 a: "Yes. By selecting the Ollama local provider option, all inspection parsing executes on your local workstation without sending data to external cloud services."
               },
               {
@@ -870,17 +913,17 @@ export default function SiteCardDashboard() {
               <div key={idx} className="py-4">
                 <button
                   onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
-                  className="w-full flex items-center justify-between text-left font-bold text-base py-2 hover:text-neutral-600 transition-colors"
+                  className="w-full flex items-center justify-between text-left font-bold text-sm py-1 hover:text-black transition-colors text-[#0b0b0b]"
                 >
                   <span>{faq.q}</span>
                   {openFaq === idx ? (
-                    <ChevronUp className="w-4 h-4 text-neutral-500" />
+                    <ChevronUp className="w-4 h-4 text-neutral-800" />
                   ) : (
-                    <ChevronDown className="w-4 h-4 text-neutral-500" />
+                    <ChevronDown className="w-4 h-4 text-neutral-400" />
                   )}
                 </button>
                 {openFaq === idx && (
-                  <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-2 leading-relaxed animate-in fade-in duration-150">
+                  <p className="text-xs text-neutral-600 mt-2 leading-relaxed animate-in fade-in duration-150">
                     {faq.a}
                   </p>
                 )}
@@ -890,62 +933,17 @@ export default function SiteCardDashboard() {
         </div>
       </section>
 
-      <footer className="bg-black text-white pt-16 pb-12 border-t border-neutral-800">
-        <div className="max-w-7xl mx-auto px-6 space-y-12">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-12 border-b border-neutral-800">
-            <div>
-              <span className="text-2xl font-bold tracking-tight">SitePulse</span>
-              <p className="text-xs text-neutral-400 mt-1">Urban Logistics & Inspection Data Platform</p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button className="text-xs font-semibold px-5 py-2.5 rounded-full bg-white text-black hover:bg-neutral-200 transition-colors">
-                Download Inspector App
-              </button>
-              <button className="text-xs font-semibold px-5 py-2.5 rounded-full bg-neutral-800 text-white hover:bg-neutral-700 transition-colors">
-                Download Manager App
-              </button>
-            </div>
+      <footer className="bg-neutral-50 text-neutral-600 py-10 border-t border-neutral-200">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-neutral-500 gap-4">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-[#0b0b0b] text-sm">Saniti AI</span>
+            <span>•</span>
+            <span>Unstructured Input to Clean Dashboard Parser</span>
           </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-xs text-neutral-400">
-            <div className="space-y-3">
-              <h4 className="font-bold text-white text-sm">Company</h4>
-              <p className="hover:text-white cursor-pointer">About us</p>
-              <p className="hover:text-white cursor-pointer">Our offerings</p>
-              <p className="hover:text-white cursor-pointer">Newsroom</p>
-              <p className="hover:text-white cursor-pointer">Careers</p>
-            </div>
-            <div className="space-y-3">
-              <h4 className="font-bold text-white text-sm">Products</h4>
-              <p className="hover:text-white cursor-pointer">Site Inspection</p>
-              <p className="hover:text-white cursor-pointer">Fleet Manager</p>
-              <p className="hover:text-white cursor-pointer">Safety Audit</p>
-              <p className="hover:text-white cursor-pointer">Enterprise API</p>
-            </div>
-            <div className="space-y-3">
-              <h4 className="font-bold text-white text-sm">Global Citizenship</h4>
-              <p className="hover:text-white cursor-pointer">Safety</p>
-              <p className="hover:text-white cursor-pointer">Diversity and Inclusion</p>
-              <p className="hover:text-white cursor-pointer">Sustainability</p>
-            </div>
-            <div className="space-y-3">
-              <h4 className="font-bold text-white text-sm">Travel</h4>
-              <p className="hover:text-white cursor-pointer">Airports</p>
-              <p className="hover:text-white cursor-pointer">Cities</p>
-            </div>
-          </div>
-
-          <div className="pt-8 border-t border-neutral-800 flex flex-col sm:flex-row items-center justify-between text-xs text-neutral-500 gap-4">
-            <p>© 2026 SitePulse Technologies Inc. — Built on Uber Design System Specifications</p>
-            <div className="flex items-center gap-6">
-              <span className="hover:text-white cursor-pointer">Privacy</span>
-              <span className="hover:text-white cursor-pointer">Accessibility</span>
-              <span className="hover:text-white cursor-pointer">Terms</span>
-            </div>
-          </div>
+          <p>© 2026 Saniti Technologies — All rights reserved</p>
         </div>
       </footer>
     </div>
   );
 }
+
