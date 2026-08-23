@@ -191,35 +191,118 @@ Urgency: HIGH. Action: Schedule seal replacement within 24 hours.`;
     showToast("JSON payload copied to clipboard");
   };
 
-  const getUrgencyBadge = (urgency: string) => {
+  const formatDateHuman = (dateStr?: string): string => {
+    if (!dateStr) return "Date unavailable";
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const getUrgencyBadge = (urgency: string, isFallback?: boolean) => {
+    const labelSuffix = isFallback ? " (Inferred)" : "";
     switch (urgency?.toLowerCase()) {
       case "critical":
         return (
           <span className="px-2.5 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-bold uppercase tracking-wider">
-            Critical Urgency
+            Critical{labelSuffix}
           </span>
         );
       case "high":
         return (
           <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wider">
-            High Urgency
+            High{labelSuffix}
           </span>
         );
       case "medium":
         return (
           <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-900 border border-blue-200 text-[10px] font-bold uppercase tracking-wider">
-            Medium Urgency
+            Medium{labelSuffix}
           </span>
         );
       case "low":
       default:
         return (
           <span className="px-2.5 py-0.5 rounded-full bg-neutral-100 text-neutral-700 border border-neutral-200 text-[10px] font-medium uppercase tracking-wider">
-            Low Urgency
+            Low{labelSuffix}
           </span>
         );
     }
   };
+
+  const renderInputBox = (centered = false) => (
+    <div className={`space-y-3 ${centered ? "w-full max-w-2xl" : "max-w-4xl mx-auto"}`}>
+      {isRecordingVoice && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 flex items-center justify-between animate-pulse">
+          <div className="flex items-center gap-3">
+            <div className="w-3 h-3 rounded-full bg-red-600 animate-ping" />
+            <span className="text-xs font-bold text-red-900">
+              Recording Voice Note ({recordingSeconds}s)... Speak field inspection notes clearly.
+            </span>
+          </div>
+          <button
+            onClick={toggleVoiceRecording}
+            className="text-xs font-bold px-3 py-1 rounded-full bg-red-600 text-white hover:bg-red-700"
+          >
+            Stop & Transcribe
+          </button>
+        </div>
+      )}
+
+      <div className="relative bg-white border border-neutral-300 shadow-sm rounded-2xl p-3 focus-within:ring-2 focus-within:ring-black focus-within:border-black transition-all">
+        <textarea
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          onKeyDown={handleKeyDown}
+          rows={centered ? 4 : 3}
+          placeholder="Type or paste unstructured site inspection text, voice transcriptions, email reports..."
+          className="w-full bg-transparent p-1.5 text-sm sm:text-base font-mono leading-relaxed text-neutral-900 placeholder:text-neutral-400 outline-none resize-none"
+        />
+
+        <div className="flex items-center justify-between pt-2 border-t border-neutral-100 px-1">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleVoiceRecording}
+              className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                isRecordingVoice
+                  ? "bg-red-600 text-white animate-bounce"
+                  : "bg-neutral-100 border border-neutral-200 text-neutral-700 hover:bg-neutral-200"
+              }`}
+              title="Record Voice Memo"
+            >
+              <Mic className="w-4 h-4 text-red-500" />
+              <span className="hidden sm:inline">
+                {isRecordingVoice ? "Stop Recording" : "Voice Memo"}
+              </span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSend}
+              disabled={loading || !inputText.trim()}
+              className={`px-5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
+                loading || !inputText.trim()
+                  ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                  : "bg-black text-white hover:bg-neutral-800 shadow-md active:scale-95"
+              }`}
+            >
+              <span>Extract Record</span>
+              <Send className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#fcfcfc] overflow-hidden">
@@ -243,82 +326,22 @@ Urgency: HIGH. Action: Schedule seal replacement within 24 hours.`;
         </div>
       </div>
 
-      {/* Chat Messages Stream */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+      {/* Main Chat Area */}
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 flex flex-col">
         {messages.length === 0 ? (
-          <div className="max-w-2xl mx-auto py-12 space-y-8 text-center animate-in fade-in duration-300">
-            <div className="inline-flex p-4 rounded-3xl bg-neutral-100 border border-neutral-200 text-black">
-              <Sparkles className="w-8 h-8 text-amber-500 animate-bounce" />
-            </div>
-
-            <div className="space-y-2">
-              <h2 className="text-2xl font-extrabold text-[#0b0b0b] tracking-tight">
-                Welcome to Saniti AI Inspection Chat
-              </h2>
-              <p className="text-xs text-neutral-600 max-w-md mx-auto leading-relaxed">
-                Paste raw field notes, email memos, or record a voice note. Our engine extracts client names, addresses, equipment statuses, and budgets into downloadable structured JSON.
+          <div className="flex-1 flex flex-col items-center justify-center max-w-2xl mx-auto w-full py-8 space-y-8 animate-in fade-in duration-300 text-center">
+            {/* Quote Header */}
+            <div className="space-y-3 px-4">
+              <blockquote className="text-lg sm:text-xl italic font-serif text-neutral-800 leading-relaxed">
+                “Transforming unstructured chaos into operational clarity.”
+              </blockquote>
+              <p className="text-[11px] font-mono text-neutral-400 uppercase tracking-widest">
+                Saniti AI Extraction Engine
               </p>
             </div>
 
-            {/* Quick Sample Input Prompts */}
-            <div className="space-y-3 pt-4 text-left">
-              <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest block text-center">
-                Click a sample log to test immediately:
-              </span>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <button
-                  onClick={() => setInputText(PRESET_NOTE_1)}
-                  className="p-4 rounded-2xl bg-white border border-neutral-200 hover:border-black hover:shadow-md transition-all text-left space-y-2 group"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-neutral-900 group-hover:text-black">
-                      Apex Chiller Note
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
-                      High
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-neutral-500 line-clamp-2 leading-relaxed">
-                    Chiller #3 vibration & coolant drop. Generator transfer switch failed test...
-                  </p>
-                </button>
-
-                <button
-                  onClick={() => setInputText(PRESET_NOTE_2)}
-                  className="p-4 rounded-2xl bg-white border border-neutral-200 hover:border-black hover:shadow-md transition-all text-left space-y-2 group"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-neutral-900 group-hover:text-black">
-                      Petrochem Hazard
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-red-100 text-red-800 text-[10px] font-bold">
-                      Critical
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-neutral-500 line-clamp-2 leading-relaxed">
-                    Tank #12 relief valve weeping vapors. Berm fracture wall repair needed...
-                  </p>
-                </button>
-
-                <button
-                  onClick={() => setInputText(PRESET_NOTE_3)}
-                  className="p-4 rounded-2xl bg-white border border-neutral-200 hover:border-black hover:shadow-md transition-all text-left space-y-2 group"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-neutral-900 group-hover:text-black">
-                      Skyline Audit
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-neutral-100 text-neutral-700 text-[10px] font-medium">
-                      Low
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-neutral-500 line-clamp-2 leading-relaxed">
-                    Elevator certification valid. Roof Top Air Handler #2 belt tension loose...
-                  </p>
-                </button>
-              </div>
-            </div>
+            {/* Centered Text Box */}
+            {renderInputBox(true)}
           </div>
         ) : (
           messages.map((msg) => (
@@ -351,19 +374,19 @@ Urgency: HIGH. Action: Schedule seal replacement within 24 hours.`;
                   {/* Assistant Header & Execution Telemetry */}
                   <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
                     <div className="flex items-center gap-2">
-                      <span className="p-1 rounded-md bg-emerald-100 text-emerald-800">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span className={`p-1 rounded-md ${msg.fallbackUsed ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
+                        <CheckCircle2 className={`w-4 h-4 ${msg.fallbackUsed ? "text-amber-600" : "text-emerald-600"}`} />
                       </span>
                       <span className="text-xs font-bold text-neutral-900">
-                        Structured Extraction Successful
+                        {msg.fallbackUsed ? "Extraction Completed (Fallback Engine)" : "Extraction Completed"}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2">
                       {msg.fallbackUsed ? (
-                        <span className="px-2.5 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-900 text-[10px] font-bold flex items-center gap-1">
-                          <Zap className="w-3 h-3 text-amber-700" />
-                          Fast Fallback Engine
+                        <span className="px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-medium flex items-center gap-1" title={msg.warning || "Fallback engine used"}>
+                          <Zap className="w-3 h-3 text-amber-600" />
+                          Fallback Engine Used
                         </span>
                       ) : (
                         <span className="px-2.5 py-0.5 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-700 text-[10px] font-mono">
@@ -373,10 +396,10 @@ Urgency: HIGH. Action: Schedule seal replacement within 24 hours.`;
                     </div>
                   </div>
 
-                  {msg.warning && (
-                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
-                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <span>{msg.warning}</span>
+                  {msg.warning && msg.fallbackUsed && (
+                    <div className="px-3 py-1.5 rounded-lg bg-amber-50/80 border border-amber-200/70 text-amber-900 text-[11px] flex items-center gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span className="truncate">{msg.warning}</span>
                     </div>
                   )}
 
@@ -389,30 +412,27 @@ Urgency: HIGH. Action: Schedule seal replacement within 24 hours.`;
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-wider">Client Record</span>
-                            {getUrgencyBadge(msg.parsedData.urgencyLevel)}
+                            {getUrgencyBadge(msg.parsedData.urgencyLevel, msg.fallbackUsed)}
                           </div>
                           <h3 className="text-base font-extrabold text-neutral-900 mt-0.5">
-                            {msg.parsedData.clientName || "Unknown Client"}
+                            {msg.parsedData.clientName || <span className="text-neutral-400 font-normal italic">Client information unavailable</span>}
                           </h3>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {/* Direct Download JSON button right on Chat Item */}
+                          <button
+                            onClick={() => onOpenModal(msg.parsedData!)}
+                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-white border border-neutral-300 text-neutral-800 hover:bg-neutral-100 transition-colors shadow-2xs"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            <span>View Details</span>
+                          </button>
                           <button
                             onClick={() => handleDownloadJsonFile(msg.parsedData!)}
                             className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-black text-white hover:bg-neutral-800 transition-colors shadow-2xs"
                           >
                             <Download className="w-3.5 h-3.5" />
                             <span>Download JSON</span>
-                          </button>
-
-                          {/* Pop-up Card view button */}
-                          <button
-                            onClick={() => onOpenModal(msg.parsedData!)}
-                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-white border border-neutral-300 text-neutral-800 hover:bg-neutral-100 transition-colors"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            <span>View Card</span>
                           </button>
                         </div>
                       </div>
@@ -421,18 +441,18 @@ Urgency: HIGH. Action: Schedule seal replacement within 24 hours.`;
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                         <div className="flex items-center gap-2 text-neutral-700">
                           <MapPin className="w-4 h-4 text-neutral-400 shrink-0" />
-                          <span className="truncate">{msg.parsedData.siteAddress || "Address not provided"}</span>
+                          <span className="truncate">{msg.parsedData.siteAddress || <span className="text-neutral-400 italic">Address not provided</span>}</span>
                         </div>
 
                         <div className="flex items-center gap-2 text-neutral-700">
                           <Calendar className="w-4 h-4 text-neutral-400 shrink-0" />
-                          <span>Date: {msg.parsedData.inspectionDate || "N/A"}</span>
+                          <span>Date: {formatDateHuman(msg.parsedData.inspectionDate)}</span>
                         </div>
 
                         <div className="flex items-center gap-2 text-neutral-700 font-semibold">
                           <DollarSign className="w-4 h-4 text-neutral-400 shrink-0" />
                           <span>
-                            Est. Budget: {msg.parsedData.budgetEstimate ? `${msg.parsedData.currency} ${msg.parsedData.budgetEstimate.toLocaleString()}` : "N/A"}
+                            Est. Budget: {msg.parsedData.budgetEstimate ? `${msg.parsedData.currency} ${msg.parsedData.budgetEstimate.toLocaleString()}` : <span className="text-neutral-400 font-normal italic">Not specified</span>}
                           </span>
                         </div>
                       </div>
@@ -441,7 +461,7 @@ Urgency: HIGH. Action: Schedule seal replacement within 24 hours.`;
                       <div className="pt-2 border-t border-neutral-200/60 flex flex-wrap items-center gap-2">
                         <span className="text-[11px] font-bold text-neutral-500 uppercase">Equipment Extracted:</span>
                         {msg.parsedData.equipmentNotes.length === 0 ? (
-                          <span className="text-xs text-neutral-400 italic">None listed</span>
+                          <span className="text-xs text-neutral-400 italic">No equipment issues detected</span>
                         ) : (
                           msg.parsedData.equipmentNotes.map((item, idx) => (
                             <span
@@ -472,15 +492,7 @@ Urgency: HIGH. Action: Schedule seal replacement within 24 hours.`;
                         className="text-neutral-500 hover:text-black font-semibold flex items-center gap-1.5"
                       >
                         <Copy className="w-3.5 h-3.5" />
-                        <span>Copy JSON Code</span>
-                      </button>
-
-                      <button
-                        onClick={() => onOpenModal(msg.parsedData!)}
-                        className="text-black font-bold flex items-center gap-1 hover:underline"
-                      >
-                        <span>Open Full Pop-Up Card Modal</span>
-                        <span>→</span>
+                        <span>Copy JSON Payload</span>
                       </button>
                     </div>
                   )}
@@ -502,74 +514,12 @@ Urgency: HIGH. Action: Schedule seal replacement within 24 hours.`;
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Chat Area */}
-      <div className="p-4 border-t border-neutral-200 bg-white shrink-0 shadow-lg">
-        <div className="max-w-4xl mx-auto space-y-3">
-          
-          {isRecordingVoice && (
-            <div className="p-3 rounded-xl bg-red-50 border border-red-200 flex items-center justify-between animate-pulse">
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 rounded-full bg-red-600 animate-ping" />
-                <span className="text-xs font-bold text-red-900">
-                  Recording Voice Note ({recordingSeconds}s)... Speak field inspection notes clearly.
-                </span>
-              </div>
-              <button
-                onClick={toggleVoiceRecording}
-                className="text-xs font-bold px-3 py-1 rounded-full bg-red-600 text-white hover:bg-red-700"
-              >
-                Stop & Transcribe
-              </button>
-            </div>
-          )}
-
-          <div className="relative bg-neutral-50 border border-neutral-300 rounded-2xl p-2 focus-within:bg-white focus-within:ring-2 focus-within:ring-black focus-within:border-black transition-all">
-            <textarea
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={3}
-              placeholder="Type or paste unstructured site inspection text, voice transcriptions, email reports..."
-              className="w-full bg-transparent p-2 text-xs font-mono text-neutral-900 placeholder:text-neutral-400 outline-none resize-none"
-            />
-
-            <div className="flex items-center justify-between pt-2 border-t border-neutral-200/80 px-2">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={toggleVoiceRecording}
-                  className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                    isRecordingVoice
-                      ? "bg-red-600 text-white animate-bounce"
-                      : "bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-100"
-                  }`}
-                  title="Record Voice Memo"
-                >
-                  <Mic className="w-4 h-4 text-red-500" />
-                  <span className="hidden sm:inline">
-                    {isRecordingVoice ? "Stop Recording" : "Voice Memo"}
-                  </span>
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleSend}
-                  disabled={loading || !inputText.trim()}
-                  className={`px-5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-                    loading || !inputText.trim()
-                      ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                      : "bg-black text-white hover:bg-neutral-800 shadow-md active:scale-95"
-                  }`}
-                >
-                  <span>Extract Record</span>
-                  <Send className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
+      {/* Input Chat Area - only shown at bottom when messages exist */}
+      {messages.length > 0 && (
+        <div className="p-4 border-t border-neutral-200 bg-white shrink-0 shadow-lg">
+          {renderInputBox(false)}
         </div>
-      </div>
+      )}
     </div>
   );
 }

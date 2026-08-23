@@ -14,25 +14,8 @@ export default function SiteCardDashboard() {
   const [activeTab, setActiveTab] = useState<"chat" | "dashboard">("chat");
   const [provider, setProvider] = useState<ProviderType>("ollama");
   const [records, setRecords] = useState<InspectionRecordItem[]>(INITIAL_RECORDS);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: "msg-init-1",
-      sender: "user",
-      text: INITIAL_RECORDS[0].sourceText,
-      timestamp: "10:30 AM",
-      inputType: "text",
-    },
-    {
-      id: "msg-init-2",
-      sender: "assistant",
-      text: "Parsed structured inspection record successfully.",
-      timestamp: "10:30 AM",
-      parsedData: INITIAL_RECORDS[0].data,
-      provider: "ollama",
-      modelName: "deepseek-coder:6.7b",
-      fallbackUsed: false,
-    },
-  ]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+
 
   const [loading, setLoading] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);

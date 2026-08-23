@@ -236,10 +236,29 @@ export default function DashboardView({
 
         {/* Records List */}
         <div className="space-y-3">
-          {filteredRecords.length === 0 ? (
+          {records.length === 0 ? (
+            <div className="p-12 text-center bg-white border border-neutral-200 rounded-2xl space-y-4 shadow-2xs">
+              <div className="w-12 h-12 rounded-2xl bg-neutral-100 border border-neutral-200 flex items-center justify-center mx-auto text-neutral-500">
+                <Building className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-neutral-900">No Inspection Records Yet</h3>
+                <p className="text-xs text-neutral-500 max-w-sm mx-auto">
+                  Your inspection database is currently empty. Use the AI Chat Assistant to parse unstructured text, voice notes, or emails into structured site cards.
+                </p>
+              </div>
+              <button
+                onClick={onNewInspection}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-black text-white text-xs font-bold hover:bg-neutral-800 transition-all shadow-md active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Start First AI Extraction</span>
+              </button>
+            </div>
+          ) : filteredRecords.length === 0 ? (
             <div className="p-12 text-center bg-white border border-neutral-200 rounded-2xl space-y-3">
               <Building className="w-8 h-8 text-neutral-300 mx-auto" />
-              <p className="text-sm font-semibold text-neutral-700">No inspection records match your filters.</p>
+              <p className="text-sm font-semibold text-neutral-700">No inspection records match your search filters.</p>
               <button
                 onClick={() => {
                   setSearchTerm("");
