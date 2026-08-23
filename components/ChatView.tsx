@@ -5,7 +5,6 @@ import {
   Send,
   Mic,
   Square,
-  Sparkles,
   Download,
   Copy,
   ExternalLink,
@@ -427,26 +426,18 @@ export default function ChatView({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#fcfcfc] overflow-hidden">
-      <div className="px-6 py-4 border-b border-neutral-200 bg-white flex items-center justify-between shrink-0 shadow-2xs">
-        <div className="flex items-center gap-3">
-          {onOpenMobileSidebar && (
-            <button
-              onClick={onOpenMobileSidebar}
-              className="md:hidden p-2 rounded-xl border border-neutral-200 text-neutral-700 hover:bg-neutral-100 transition-all"
-              aria-label="Open sidebar menu"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-          )}
-          <div className="p-2 rounded-xl bg-neutral-900 text-white">
-            <Sparkles className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div>
-            <h1 className="text-sm font-extrabold text-[#0b0b0b] tracking-tight">AI Inspection Assistant</h1>
-            <p className="text-[11px] text-neutral-500">Unstructured Text & Voice Notes to Structured Schema</p>
-          </div>
+      {onOpenMobileSidebar && (
+        <div className="md:hidden px-4 py-3 border-b border-neutral-200 bg-white flex items-center gap-3 shrink-0">
+          <button
+            onClick={onOpenMobileSidebar}
+            className="p-2 rounded-xl border border-neutral-200 text-neutral-700 hover:bg-neutral-100 transition-all"
+            aria-label="Open sidebar menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <span className="text-sm font-bold text-neutral-900">Saniti AI</span>
         </div>
-      </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 flex flex-col">
         {messages.length === 0 ? (
@@ -455,9 +446,6 @@ export default function ChatView({
               <blockquote className="text-lg sm:text-xl italic font-serif text-neutral-800 leading-relaxed">
                 “Transforming unstructured chaos into operational clarity.”
               </blockquote>
-              <p className="text-[11px] font-mono text-neutral-400 uppercase tracking-widest">
-                Saniti AI Extraction Engine
-              </p>
             </div>
 
             {renderInputBox(true)}
