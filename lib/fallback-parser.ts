@@ -10,16 +10,31 @@ export function fastFallbackParse(rawText: string): SiteInspection {
   if (clientMatch && clientMatch[1]) {
     clientName = clientMatch[1].trim();
   } else {
-    // Check for email address or company suffix
-    const emailMatch = text.match(/([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-    if (emailMatch) {
-      const domainName = emailMatch[2].split(".")[0];
-      const capitalizedDomain = domainName.charAt(0).toUpperCase() + domainName.slice(1);
-      clientName = `${capitalizedDomain} (${emailMatch[0]})`;
+    // Check if paperwork is explicitly missing or unknown
+    const isPaperworkMissing = text.toLowerCase().includes("paperwork was missing") || text.toLowerCase().includes("paperwork missing");
+    
+    // Check for named contact person (e.g. "John said", "Contact: John")
+    const contactMatch = text.match(/\b([A-Z][a-z]+)\s+(?:said|mentioned|called|reported|requested|notified)\b/);
+    const ignoreNames = ["Had", "The", "Need", "Also", "Things", "Anyway", "Inspection", "This"];
+
+    if (contactMatch && contactMatch[1] && !ignoreNames.includes(contactMatch[1])) {
+      clientName = isPaperworkMissing 
+        ? `${contactMatch[1]} (Contact - Paperwork Missing)`
+        : `${contactMatch[1]} (Contact Person)`;
+    } else if (isPaperworkMissing) {
+      clientName = "Unknown Client (Paperwork Missing)";
     } else {
-      const companySuffixMatch = text.match(/\b([A-Z][A-Za-z0-9\s&]+(?:Inc|LLC|Corp|Corporation|Ltd|Manufacturing|Plaza|Services|Group))\b/);
-      if (companySuffixMatch) {
-        clientName = companySuffixMatch[1].trim();
+      // Check for email address or company suffix
+      const emailMatch = text.match(/([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+      if (emailMatch) {
+        const domainName = emailMatch[2].split(".")[0];
+        const capitalizedDomain = domainName.charAt(0).toUpperCase() + domainName.slice(1);
+        clientName = `${capitalizedDomain} (${emailMatch[0]})`;
+      } else {
+        const companySuffixMatch = text.match(/\b([A-Z][A-Za-z0-9\s&]+(?:Inc|LLC|Corp|Corporation|Ltd|Manufacturing|Plaza|Services|Group))\b/);
+        if (companySuffixMatch) {
+          clientName = companySuffixMatch[1].trim();
+        }
       }
     }
   }

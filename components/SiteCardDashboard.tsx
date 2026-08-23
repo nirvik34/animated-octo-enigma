@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Sidebar, { TabType } from "@/components/Sidebar";
 import ChatView from "@/components/ChatView";
 import DashboardView from "@/components/DashboardView";
@@ -17,6 +17,7 @@ export default function SiteCardDashboard() {
   const [provider, setProvider] = useState<ProviderType>("auto");
   const [records, setRecords] = useState<InspectionRecordItem[]>(INITIAL_RECORDS);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
   const [loading, setLoading] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -36,6 +37,60 @@ export default function SiteCardDashboard() {
       return {};
     }
   });
+
+  // Restore history & provider state from localStorage on mount
+  useEffect(() => {
+    try {
+      const storedRecords = localStorage.getItem("saniti_inspection_records");
+      if (storedRecords) {
+        setRecords(JSON.parse(storedRecords));
+      }
+
+      const storedMessages = localStorage.getItem("saniti_chat_messages");
+      if (storedMessages) {
+        setChatMessages(JSON.parse(storedMessages));
+      }
+
+      const storedProvider = localStorage.getItem("saniti_provider");
+      if (storedProvider) {
+        setProvider(storedProvider as ProviderType);
+      }
+    } catch (e) {
+      console.error("Failed to restore history from localStorage:", e);
+    } finally {
+      setIsLoaded(true);
+    }
+  }, []);
+
+  // Save records to localStorage whenever updated
+  useEffect(() => {
+    if (!isLoaded) return;
+    try {
+      localStorage.setItem("saniti_inspection_records", JSON.stringify(records));
+    } catch (e) {
+      console.error("Failed to persist inspection records to localStorage:", e);
+    }
+  }, [records, isLoaded]);
+
+  // Save chat messages to localStorage whenever updated
+  useEffect(() => {
+    if (!isLoaded) return;
+    try {
+      localStorage.setItem("saniti_chat_messages", JSON.stringify(chatMessages));
+    } catch (e) {
+      console.error("Failed to persist chat messages to localStorage:", e);
+    }
+  }, [chatMessages, isLoaded]);
+
+  // Save provider selection to localStorage whenever updated
+  useEffect(() => {
+    if (!isLoaded) return;
+    try {
+      localStorage.setItem("saniti_provider", provider);
+    } catch (e) {
+      console.error("Failed to persist provider selection to localStorage:", e);
+    }
+  }, [provider, isLoaded]);
 
   const handleSaveKeys = (keys: CustomApiKeys) => {
     setSavedKeys(keys);
