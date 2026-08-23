@@ -207,7 +207,7 @@ export default function DashboardView({
               Total Est. Repair Budget
             </span>
             <div className="text-2xl font-black text-emerald-600">
-              USD ${totalBudget.toLocaleString()}
+              ₹{totalBudget.toLocaleString()}
             </div>
             <p className="text-[11px] text-neutral-400">Aggregated across all field items</p>
           </div>
@@ -365,7 +365,7 @@ export default function DashboardView({
                     <div className="flex items-center gap-2 text-neutral-900 font-bold">
                       <DollarSign className="w-4 h-4 text-neutral-400 shrink-0" />
                       <span>
-                        Est. Budget: {data.budgetEstimate ? `${data.currency} ${data.budgetEstimate.toLocaleString()}` : "N/A"}
+                        Est. Budget: {data.budgetEstimate ? `${data.currency === 'USD' ? '₹' : data.currency} ${data.budgetEstimate.toLocaleString()}` : "N/A"}
                       </span>
                     </div>
                   </div>

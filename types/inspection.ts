@@ -37,7 +37,7 @@ export const SiteInspectionSchema = z.object({
     .catch(() => new Date().toISOString().split("T")[0])
     .default(() => new Date().toISOString().split("T")[0]),
   budgetEstimate: z.number().nullable().catch(null).default(null),
-  currency: z.string().catch("USD").default("USD"),
+  currency: z.string().catch("INR").default("INR"),
   urgencyLevel: UrgencyLevelSchema.catch("medium").default("medium"),
   status: RecordStatusSchema.optional().catch("needs_review"),
   equipmentNotes: z.array(EquipmentNoteSchema).catch([]).default([]),
@@ -84,7 +84,7 @@ export const EMPTY_SITE_INSPECTION: SiteInspection = {
   siteAddress: "",
   inspectionDate: new Date().toISOString().split("T")[0],
   budgetEstimate: null,
-  currency: "USD",
+  currency: "INR",
   urgencyLevel: "medium",
   status: "needs_review",
   equipmentNotes: [],
@@ -97,7 +97,7 @@ export const DEFAULT_SITE_INSPECTION: SiteInspection = {
   siteAddress: "1040 Industrial Parkway, Building B, Austin, TX 78758",
   inspectionDate: new Date().toISOString().split("T")[0],
   budgetEstimate: 24500,
-  currency: "USD",
+  currency: "INR",
   urgencyLevel: "high",
   status: "ready",
   equipmentNotes: [

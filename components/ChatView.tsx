@@ -570,7 +570,7 @@ export default function ChatView({
                               <span>
                                 Est. Budget:{" "}
                                 {msg.parsedData.budgetEstimate
-                                  ? `${msg.parsedData.currency} ${msg.parsedData.budgetEstimate.toLocaleString()}`
+                                  ? `${msg.parsedData.currency === 'USD' ? '₹' : msg.parsedData.currency} ${msg.parsedData.budgetEstimate.toLocaleString()}`
                                   : "N/A"}
                               </span>
                             </div>

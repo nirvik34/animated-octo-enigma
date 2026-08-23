@@ -39,19 +39,21 @@ export function fastFallbackParse(rawText: string): SiteInspection {
   }
 
   let budgetEstimate: number | null = null;
-  let currency = "USD";
+  let currency = "INR";
 
   if (text.match(/EUR|€/i)) currency = "EUR";
   else if (text.match(/GBP|£/i)) currency = "GBP";
   else if (text.match(/CAD/i)) currency = "CAD";
+  else if (text.match(/INR|₹|rupee/i)) currency = "INR";
+  else if (text.match(/USD/i)) currency = "USD";
 
-  const budgetMatch = text.match(/(?:Budget|Estimated Budget|Cost|Total Cost):\s*\$?([\d,]+(?:\.\d+)?)/i);
+  const budgetMatch = text.match(/(?:Budget|Estimated Budget|Cost|Total Cost):\s*(?:[\$₹]|INR|USD)?\s*([\d,]+(?:\.\d+)?)/i);
   if (budgetMatch && budgetMatch[1]) {
     budgetEstimate = parseFloat(budgetMatch[1].replace(/,/g, ""));
   } else {
-    const dollarMatch = text.match(/\$([\d,]+(?:\.\d+)?)\s*(?:USD)?/i);
-    if (dollarMatch && dollarMatch[1]) {
-      const val = parseFloat(dollarMatch[1].replace(/,/g, ""));
+    const numericMatch = text.match(/(?:₹|\$|INR|USD)\s*([\d,]+(?:\.\d+)?)/i);
+    if (numericMatch && numericMatch[1]) {
+      const val = parseFloat(numericMatch[1].replace(/,/g, ""));
       if (val > 100) {
         budgetEstimate = val;
       }

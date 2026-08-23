@@ -189,7 +189,7 @@ export default function ClientsView({
                   <div>
                     <span className="text-neutral-500 block">Total Est. Budget</span>
                     <span className="font-semibold text-neutral-900">
-                      USD ${activeClient.totalBudget.toLocaleString()}
+                      ₹{activeClient.totalBudget.toLocaleString()}
                     </span>
                   </div>
                 </div>
