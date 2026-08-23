@@ -38,9 +38,28 @@ export async function POST(req: Request) {
       });
     }
 
+    const requestedProvider = (providerOverride || process.env.LLM_PROVIDER || "ollama").toLowerCase() as ProviderType;
+
+    // 1. Check provider health & detect installed models
+    const health = await checkProviderHealth(requestedProvider);
+    if (!health.ok) {
+      // Automatic failover to Heuristic Fallback when provider health check fails
+      const fallbackData = fastFallbackParse(rawText);
+      const executionMs = Date.now() - startTime;
+      return NextResponse.json({
+        success: true,
+        data: fallbackData,
+        provider: `${requestedProvider} (Failed -> Fallback)`,
+        modelName: `Instant Heuristic Engine (${executionMs}ms)`,
+        fallbackUsed: true,
+        warning: `Primary provider '${requestedProvider}' unavailable (${health.message}). Automatically recovered using Fast Fallback Engine.`,
+      });
+    }
+
+    // 2. Get LLM provider configuration using the verified available model
     let providerConfig;
     try {
-      providerConfig = getLLMProviderConfig(providerOverride as ProviderType);
+      providerConfig = getLLMProviderConfig(requestedProvider, health.availableModel);
     } catch (configErr: any) {
       return NextResponse.json(
         { error: configErr.message || "Invalid provider configuration." },
@@ -49,21 +68,6 @@ export async function POST(req: Request) {
     }
 
     const { provider, modelName, model } = providerConfig;
-
-    const health = await checkProviderHealth(provider);
-    if (!health.ok) {
-      // Automatic failover to Heuristic Fallback when provider health check fails
-      const fallbackData = fastFallbackParse(rawText);
-      const executionMs = Date.now() - startTime;
-      return NextResponse.json({
-        success: true,
-        data: fallbackData,
-        provider: `${provider} (Failed -> Fallback)`,
-        modelName: `Instant Heuristic Engine (${executionMs}ms)`,
-        fallbackUsed: true,
-        warning: `Primary provider '${provider}' unavailable (${health.message}). Automatically recovered using Fast Fallback Engine.`,
-      });
-    }
 
     const systemPrompt = `You are a world-class industrial site inspection analyst and structured data extractor.
 Your job is to read raw, messy, unformatted inspection logs (voice memo transcripts, emails, field notes, emergency reports) and convert them into a clean JSON structure adhering strictly to the schema provided.

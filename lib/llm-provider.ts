@@ -10,7 +10,10 @@ export interface ProviderConfig {
   model: any;
 }
 
-export function getLLMProviderConfig(providerOverride?: ProviderType): ProviderConfig {
+export function getLLMProviderConfig(
+  providerOverride?: ProviderType,
+  modelOverrideName?: string
+): ProviderConfig {
   const provider = (
     providerOverride ||
     process.env.LLM_PROVIDER ||
@@ -24,7 +27,7 @@ export function getLLMProviderConfig(providerOverride?: ProviderType): ProviderC
         "OpenAI API Key is missing. Set OPENAI_API_KEY in your environment variables or choose Ollama for local mode."
       );
     }
-    const modelName = process.env.OPENAI_MODEL || "gpt-4o-mini";
+    const modelName = modelOverrideName || process.env.OPENAI_MODEL || "gpt-4o-mini";
     const openai = createOpenAI({ apiKey });
     return {
       provider: "openai",
@@ -41,7 +44,7 @@ export function getLLMProviderConfig(providerOverride?: ProviderType): ProviderC
         "Google AI Key is missing. Set GOOGLE_GENERATIVE_AI_API_KEY in your environment variables or choose Ollama for local mode."
       );
     }
-    const modelName = process.env.GOOGLE_MODEL || "gemini-1.5-flash";
+    const modelName = modelOverrideName || process.env.GOOGLE_MODEL || "gemini-1.5-flash";
     const google = createGoogleGenerativeAI({ apiKey });
     return {
       provider: "google",
@@ -51,7 +54,7 @@ export function getLLMProviderConfig(providerOverride?: ProviderType): ProviderC
   }
 
   const rawBaseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-  const modelName = process.env.OLLAMA_MODEL || "llama3.2";
+  const modelName = modelOverrideName || process.env.OLLAMA_MODEL || "deepseek-coder:6.7b";
   const normalizedBase = rawBaseUrl.replace(/\/$/, "").replace(/\/v1$/, "").replace(/\/api$/, "");
   
   const ollamaOpenAI = createOpenAI({
@@ -67,8 +70,9 @@ export function getLLMProviderConfig(providerOverride?: ProviderType): ProviderC
 }
 
 export async function checkProviderHealth(
-  provider: ProviderType
-): Promise<{ ok: boolean; message?: string }> {
+  provider: ProviderType,
+  requestedModelName?: string
+): Promise<{ ok: boolean; message?: string; availableModel?: string }> {
   if (provider === "openai") {
     if (!process.env.OPENAI_API_KEY) {
       return {
@@ -110,11 +114,41 @@ export async function checkProviderHealth(
           message: `Ollama server responded with HTTP status ${res.status}.`,
         };
       }
-      return { ok: true };
+
+      const data = await res.json();
+      const installedModels: string[] = (data.models || []).map((m: any) => m.name);
+
+      if (installedModels.length === 0) {
+        return {
+          ok: false,
+          message: "Ollama server is running but has no models installed. Pull a model using 'ollama pull llama3.2' or 'ollama pull deepseek-coder:6.7b'.",
+        };
+      }
+
+      const targetModel = requestedModelName || process.env.OLLAMA_MODEL || "llama3.2";
+      // Find matching installed model or exact prefix match
+      const matched = installedModels.find(
+        (m) =>
+          m === targetModel ||
+          m.startsWith(`${targetModel}:`) ||
+          targetModel.startsWith(m.split(":")[0])
+      );
+
+      if (matched) {
+        return { ok: true, availableModel: matched };
+      }
+
+      // If requested model isn't installed, auto-select first available installed model
+      const fallbackInstalled = installedModels[0];
+      return {
+        ok: true,
+        availableModel: fallbackInstalled,
+        message: `Model '${targetModel}' not found in Ollama. Auto-switched to installed model '${fallbackInstalled}'.`,
+      };
     } catch (err: any) {
       return {
         ok: false,
-        message: `Local Ollama instance is unreachable at ${rawBaseUrl}. Ensure Ollama is installed and running ('ollama serve' or app active). Error: ${err?.message || err}`,
+        message: `Local Ollama instance is unreachable at ${rawBaseUrl}. Ensure Ollama is running ('ollama serve'). Error: ${err?.message || err}`,
       };
     }
   }

@@ -35,71 +35,6 @@ interface ChatViewProps {
   showToast: (msg: string) => void;
 }
 
-const PRESET_NOTE_1 = `URGENT SITE INSPECTION REPORT
-Client: Apex Manufacturing Solutions
-Site Location: 1040 Industrial Parkway, Building B, Austin, TX 78758
-Date: 2026-08-21
-Inspector: Marcus Vance (Senior Field Tech)
-
-Summary:
-Conducted quarterly walkthrough of primary utility corridors and mechanical room. Found multiple equipment issues requiring immediate attention before next production shift.
-
-Key Issues & Observations:
-* Chiller Unit #3 showing heavy vibration in primary bearing housing. Coolant pressure is currently 18 PSI (normal threshold 32 PSI). Needs technician review.
-* Main Transformer Substation thermal sweep clean. No hotspots recorded on infrared camera. Unit is fully operational.
-* Backup Diesel Generator failed automatic transfer switch test during simulated outage. Fuel line showing severe rust and corrosion. Recommend immediate replacement.
-* Water pooling observed near South Loading Bay electrical sub-panel due to blocked exterior storm drain.
-* Fire suppression pressure gauge reading 15% below operational minimum.
-* Vibration isolators on air handler units worn beyond recommended tolerance.
-
-Financial & Scheduling:
-Estimated total repair and maintenance budget: $24,500 USD.
-Urgency: HIGH. Action required within 48 hours.
-
-Next Steps:
-1. Issue urgent work order for Backup Generator transfer switch replacement.
-2. Schedule HVAC technician to flush and repair Chiller Unit #3 bearing.
-3. Notify facility manager regarding South Bay drainage clearing.`;
-
-const PRESET_NOTE_2 = `CRITICAL HAZARD FIELD REPORT
-Client: Gulf Coast Petrochemical Tank Farm #4
-Site: 8800 Maritime Highway, Dock 12, Freeport, TX 77541
-Inspection Date: 2026-08-20
-Estimated Budget: $68,000 USD
-
-Field Findings:
-Emergency inspection triggered by pressure drop alarm on Main Storage Tank #12 pipeline header.
-* Main Storage Tank #12 relief valve weeping volatile organic vapors into secondary containment zone. Valve seal compromised. STATUS: REPLACE IMMEDIATELY.
-* Secondary Containment Berm wall #3 has 2-inch structural fracture near east drainage valve. Water tight integrity lost. STATUS: NEEDS REPAIR.
-* Emergency Shutdown System (ESD) loop tested successful across all 4 remote stations. STATUS: OPERATIONAL.
-* Gas detection sensor grid calibrated successfully with zero drift. STATUS: OPERATIONAL.
-
-Observations:
-- Containment wall fracture poses environmental compliance risk if heavy rainfall occurs.
-- Replacement 4-inch ANSI relief valve is available in regional warehouse stock.
-
-Urgency: CRITICAL. Shutdown zone established.
-Action Items:
-- Dispatch pipefitting crew for emergency relief valve swap out today.
-- Inject epoxy sealant into berm fracture and reinforce with outer buttress.
-- File Tier II environmental incident log with regional safety officer.`;
-
-const PRESET_NOTE_3 = `ROUTINE PREMISES AUDIT
-Client: Skyline Commercial Tower A
-Address: 450 North Michigan Avenue, Chicago, IL 60611
-Date: 2026-08-19
-Budget: $4,200 USD
-Urgency: LOW
-
-Details:
-Standard bi-monthly physical facility audit.
-* Elevator Bank B (Units 1-4) operating within smooth acceleration parameters. Annual certification valid through Nov 2026. STATUS: OPERATIONAL.
-* Roof Top Air Handler #2 belt tension loose, slight squeal on start-up. STATUS: NEEDS REPAIR.
-* Fire Extinguishers Level 14-22 fully charged and tag dates updated. STATUS: OPERATIONAL.
-
-Notes:
-- Overall facility cleanliness excellent.
-- Recommended preventive maintenance check for AHU #2 during upcoming weekend window.`;
 
 export default function ChatView({
   messages,
@@ -114,6 +49,13 @@ export default function ChatView({
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const initialTextRef = useRef<string>("");
+  const speechRecognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [recordingEngine, setRecordingEngine] = useState<"speech_api" | "media_recorder" | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -133,38 +75,169 @@ export default function ChatView({
     };
   }, [isRecordingVoice]);
 
+  const startMediaRecorder = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showToast("⚠️ Microphone recording is not supported in this browser environment.");
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        if (audioChunksRef.current.length === 0) return;
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        
+        // Cleanup mic tracks
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+          mediaStreamRef.current = null;
+        }
+
+        showToast("⏳ Transcribing microphone recording...");
+        try {
+          const formData = new FormData();
+          formData.append("file", audioBlob, "recording.webm");
+
+          const res = await fetch("/api/transcribe", {
+            method: "POST",
+            body: formData,
+          });
+
+          const data = await res.json();
+          if (data.text) {
+            setInputText((prev) => (prev ? `${prev}\n\n${data.text}` : data.text));
+            showToast(`✓ Voice note transcribed (${data.engine || "Audio Engine"})! Review text & click Extract Record.`);
+          } else {
+            showToast(`Transcription note: ${data.error || "Recording saved"}`);
+          }
+        } catch (err: any) {
+          showToast("Failed to connect to transcription service.");
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecordingVoice(true);
+      setRecordingEngine("media_recorder");
+      showToast("🎙 Recording microphone audio... Speak into mic, then click Stop Dictating.");
+    } catch (e: any) {
+      console.error("Microphone access error:", e);
+      showToast("Could not access microphone. Please grant permission in browser.");
+    }
+  };
+
+  const startRecording = () => {
+    const SpeechRecognition =
+      typeof window !== "undefined" &&
+      ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+
+    if (!SpeechRecognition) {
+      // Fallback directly to HTML5 MediaRecorder if Speech API is absent
+      startMediaRecorder();
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+
+      const currentInput = inputText;
+      initialTextRef.current = currentInput ? currentInput + (currentInput.endsWith(" ") ? "" : " ") : "";
+
+      recognition.onresult = (event: any) => {
+        let transcript = "";
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        setInputText(initialTextRef.current + transcript);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn("Speech recognition notice:", event.error);
+        if (event.error === "network") {
+          // Gracefully fall back to MediaRecorder when Speech API network is unreachable
+          if (speechRecognitionRef.current) {
+            try { speechRecognitionRef.current.stop(); } catch {}
+            speechRecognitionRef.current = null;
+          }
+          showToast("⚠️ Cloud Speech network unreachable. Switched to Microphone Audio Recorder...");
+          startMediaRecorder();
+        } else if (event.error !== "no-speech") {
+          showToast(`Voice notice: ${event.error}`);
+        }
+      };
+
+      recognition.onend = () => {
+        if (recordingEngine === "speech_api") {
+          setIsRecordingVoice(false);
+          setRecordingEngine(null);
+        }
+      };
+
+      recognition.start();
+      speechRecognitionRef.current = recognition;
+      setIsRecordingVoice(true);
+      setRecordingEngine("speech_api");
+      showToast("🎙 Listening... Speak into microphone to type text in real time.");
+    } catch (e) {
+      console.warn("Speech recognition failed to initialize, trying MediaRecorder:", e);
+      startMediaRecorder();
+    }
+  };
+
+  const stopRecording = () => {
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch {}
+      speechRecognitionRef.current = null;
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
+      mediaRecorderRef.current = null;
+    }
+
+    setIsRecordingVoice(false);
+    setRecordingEngine(null);
+  };
+
+  const toggleVoiceRecording = () => {
+    if (isRecordingVoice) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
   const handleSend = () => {
     if (!inputText.trim() || loading) return;
+    if (isRecordingVoice) {
+      stopRecording();
+    }
     onSendMessage(inputText.trim(), isRecordingVoice ? "voice" : "text");
     setInputText("");
-    if (isRecordingVoice) {
-      setIsRecordingVoice(false);
-    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
-    }
-  };
-
-  const toggleVoiceRecording = () => {
-    if (isRecordingVoice) {
-      // Stop voice recording and simulate spoken audio transcript
-      setIsRecordingVoice(false);
-      const simulatedVoiceText = `Voice Note Memo (Audio Recording 0:${recordingSeconds < 10 ? '0' : ''}${recordingSeconds}):
-Client: Western Pipeline Substation #7
-Location: 440 Route 99, Midland, TX
-Date: 2026-08-23
-Inspection findings: Primary oil pump showing weeping seal near flange. Main breaker housing operational. Thermal camera sweep normal.
-Budget estimate: $12,500 USD.
-Urgency: HIGH. Action: Schedule seal replacement within 24 hours.`;
-      setInputText(simulatedVoiceText);
-      showToast("Voice note transcribed into field text!");
-    } else {
-      setIsRecordingVoice(true);
-      showToast("Recording voice note... Click again to finish.");
     }
   };
 
@@ -244,14 +317,15 @@ Urgency: HIGH. Action: Schedule seal replacement within 24 hours.`;
           <div className="flex items-center gap-3">
             <div className="w-3 h-3 rounded-full bg-red-600 animate-ping" />
             <span className="text-xs font-bold text-red-900">
-              Recording Voice Note ({recordingSeconds}s)... Speak field inspection notes clearly.
+              🎙 Live Voice Typing ({recordingSeconds}s)... Speak into microphone to type text in real time.
             </span>
           </div>
           <button
+            type="button"
             onClick={toggleVoiceRecording}
-            className="text-xs font-bold px-3 py-1 rounded-full bg-red-600 text-white hover:bg-red-700"
+            className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 shadow-sm"
           >
-            Stop & Transcribe
+            Stop Dictating
           </button>
         </div>
       )}
@@ -262,7 +336,7 @@ Urgency: HIGH. Action: Schedule seal replacement within 24 hours.`;
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={handleKeyDown}
           rows={centered ? 4 : 3}
-          placeholder="Type or paste unstructured site inspection text, voice transcriptions, email reports..."
+          placeholder="Type, paste inspection text, or click 'Live Voice Typing' to dictate into text box..."
           className="w-full bg-transparent p-1.5 text-sm sm:text-base font-mono leading-relaxed text-neutral-900 placeholder:text-neutral-400 outline-none resize-none"
         />
 
@@ -271,16 +345,20 @@ Urgency: HIGH. Action: Schedule seal replacement within 24 hours.`;
             <button
               type="button"
               onClick={toggleVoiceRecording}
-              className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              className={`p-2 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 isRecordingVoice
                   ? "bg-red-600 text-white animate-bounce"
                   : "bg-neutral-100 border border-neutral-200 text-neutral-700 hover:bg-neutral-200"
               }`}
-              title="Record Voice Memo"
+              title="Live Voice Dictation (Client-side)"
             >
-              <Mic className="w-4 h-4 text-red-500" />
+              {isRecordingVoice ? (
+                <MicOff className="w-4 h-4 text-white" />
+              ) : (
+                <Mic className="w-4 h-4 text-red-500" />
+              )}
               <span className="hidden sm:inline">
-                {isRecordingVoice ? "Stop Recording" : "Voice Memo"}
+                {isRecordingVoice ? "Stop Dictating" : "Live Voice Typing"}
               </span>
             </button>
           </div>
