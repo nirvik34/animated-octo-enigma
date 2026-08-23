@@ -46,16 +46,22 @@ export default function ChatView({
 }: ChatViewProps) {
   const [inputText, setInputText] = useState<string>("");
   const [isRecordingVoice, setIsRecordingVoice] = useState<boolean>(false);
+  const isRecordingVoiceRef = useRef<boolean>(false);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
+  const [modelLoadingPct, setModelLoadingPct] = useState<number | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
+  const isTranscribingRef = useRef<boolean>(false);
+  const [recordingEngine, setRecordingEngine] = useState<"whisper_webgpu" | "whisper_wasm" | "speech_api" | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const sliceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const initialTextRef = useRef<string>("");
-  const speechRecognitionRef = useRef<any>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const [recordingEngine, setRecordingEngine] = useState<"speech_api" | "media_recorder" | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const speechRecognitionRef = useRef<any>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -75,19 +81,37 @@ export default function ChatView({
     };
   }, [isRecordingVoice]);
 
-  const startMediaRecorder = async () => {
+  const startWhisperRecording = async (): Promise<boolean> => {
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
         showToast("⚠️ Microphone recording is not supported in this browser environment.");
-        return;
+        return false;
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
-
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+
+      const currentInput = inputText;
+      initialTextRef.current = currentInput
+        ? currentInput + (currentInput.endsWith(" ") || currentInput.endsWith("\n") ? "" : " ")
+        : "";
+
+      let mimeType = "";
+      if (typeof MediaRecorder !== "undefined") {
+        if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+          mimeType = "audio/webm;codecs=opus";
+        } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+          mimeType = "audio/webm";
+        } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+          mimeType = "audio/mp4";
+        } else if (MediaRecorder.isTypeSupported("audio/ogg")) {
+          mimeType = "audio/ogg";
+        }
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
@@ -95,56 +119,72 @@ export default function ChatView({
         }
       };
 
-      mediaRecorder.onstop = async () => {
-        if (audioChunksRef.current.length === 0) return;
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        
-        // Cleanup mic tracks
-        if (mediaStreamRef.current) {
-          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-          mediaStreamRef.current = null;
-        }
+      mediaRecorder.start(1000);
 
-        showToast("⏳ Transcribing microphone recording...");
-        try {
-          const formData = new FormData();
-          formData.append("file", audioBlob, "recording.webm");
-
-          const res = await fetch("/api/transcribe", {
-            method: "POST",
-            body: formData,
-          });
-
-          const data = await res.json();
-          if (data.text) {
-            setInputText((prev) => (prev ? `${prev}\n\n${data.text}` : data.text));
-            showToast(`✓ Voice note transcribed (${data.engine || "Audio Engine"})! Review text & click Extract Record.`);
-          } else {
-            showToast(`Transcription note: ${data.error || "Recording saved"}`);
-          }
-        } catch (err: any) {
-          showToast("Failed to connect to transcription service.");
-        }
-      };
-
-      mediaRecorder.start();
+      isRecordingVoiceRef.current = true;
       setIsRecordingVoice(true);
-      setRecordingEngine("media_recorder");
-      showToast("🎙 Recording microphone audio... Speak into mic, then click Stop Dictating.");
-    } catch (e: any) {
-      console.error("Microphone access error:", e);
-      showToast("Could not access microphone. Please grant permission in browser.");
+
+      showToast("⚡ Initializing local Whisper AI model...");
+      import("@/lib/client-whisper").then(({ getWhisperTranscriber, getActiveDevice }) => {
+        getWhisperTranscriber((info) => {
+          if (info.status === "progress" && info.loaded && info.total) {
+            const pct = Math.round((info.loaded / info.total) * 100);
+            setModelLoadingPct(pct);
+          }
+        }).then(() => {
+          setModelLoadingPct(null);
+          const device = getActiveDevice();
+          setRecordingEngine(device === "webgpu" ? "whisper_webgpu" : "whisper_wasm");
+          showToast(`🎙 Local Whisper AI (${device.toUpperCase()}) active! Dictating into text box.`);
+        }).catch((err) => {
+          console.warn("Whisper model loading notice:", err);
+        });
+      });
+
+      sliceTimerRef.current = setInterval(async () => {
+        if (!isRecordingVoiceRef.current || audioChunksRef.current.length === 0 || isTranscribingRef.current) return;
+
+        try {
+          isTranscribingRef.current = true;
+          setIsTranscribing(true);
+
+          const currentBlob = new Blob(audioChunksRef.current, {
+            type: mediaRecorder.mimeType || "audio/webm",
+          });
+          if (currentBlob.size < 1000) return;
+
+          const { transcribeAudioClient } = await import("@/lib/client-whisper");
+          const partialText = await transcribeAudioClient(currentBlob);
+          if (partialText && isRecordingVoiceRef.current) {
+            setInputText(initialTextRef.current + partialText);
+          }
+        } catch (err) {
+          console.warn("Interim Whisper dictation error:", err);
+        } finally {
+          isTranscribingRef.current = false;
+          setIsTranscribing(false);
+        }
+      }, 3500);
+
+      return true;
+    } catch (err: any) {
+      console.warn("Failed to initialize microphone recording:", err);
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        showToast("⚠️ Microphone permission denied. Please allow microphone access in browser settings.");
+      } else {
+        showToast(`⚠️ Microphone access error: ${err.message || err.name}`);
+      }
+      return false;
     }
   };
 
-  const startRecording = () => {
+  const startBrowserSpeechRecognition = () => {
     const SpeechRecognition =
       typeof window !== "undefined" &&
       ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
 
     if (!SpeechRecognition) {
-      // Fallback directly to HTML5 MediaRecorder if Speech API is absent
-      startMediaRecorder();
+      startWhisperRecording();
       return;
     }
 
@@ -155,66 +195,159 @@ export default function ChatView({
       recognition.lang = "en-US";
 
       const currentInput = inputText;
-      initialTextRef.current = currentInput ? currentInput + (currentInput.endsWith(" ") ? "" : " ") : "";
+      initialTextRef.current = currentInput
+        ? currentInput + (currentInput.endsWith(" ") || currentInput.endsWith("\n") ? "" : " ")
+        : "";
+
+      let isFallingBack = false;
 
       recognition.onresult = (event: any) => {
-        let transcript = "";
-        for (let i = 0; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+        let finalText = "";
+        let interimText = "";
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalText += transcript;
+          } else {
+            interimText += transcript;
+          }
         }
-        setInputText(initialTextRef.current + transcript);
+
+        if (finalText) {
+          initialTextRef.current += finalText + (finalText.endsWith(" ") ? "" : " ");
+        }
+
+        setInputText(initialTextRef.current + interimText);
       };
 
       recognition.onerror = (event: any) => {
-        console.warn("Speech recognition notice:", event.error);
-        if (event.error === "network") {
-          // Gracefully fall back to MediaRecorder when Speech API network is unreachable
-          if (speechRecognitionRef.current) {
-            try { speechRecognitionRef.current.stop(); } catch {}
+        console.warn("Speech recognition error:", event.error);
+        if (
+          event.error === "network" ||
+          event.error === "aborted" ||
+          event.error === "audio-capture" ||
+          event.error === "service-not-allowed"
+        ) {
+          if (!isFallingBack) {
+            isFallingBack = true;
+            console.log("Switching seamlessly to local Whisper AI fallback...");
             speechRecognitionRef.current = null;
+            try {
+              recognition.stop();
+            } catch {}
+            startWhisperRecording();
           }
-          showToast("⚠️ Cloud Speech network unreachable. Switched to Microphone Audio Recorder...");
-          startMediaRecorder();
+        } else if (event.error === "not-allowed" || event.error === "permission-denied") {
+          showToast("⚠️ Microphone permission denied in browser settings.");
+          stopRecording();
         } else if (event.error !== "no-speech") {
           showToast(`Voice notice: ${event.error}`);
+          stopRecording();
         }
       };
 
       recognition.onend = () => {
-        if (recordingEngine === "speech_api") {
-          setIsRecordingVoice(false);
-          setRecordingEngine(null);
+        if (isFallingBack) return;
+        if (isRecordingVoiceRef.current && speechRecognitionRef.current) {
+          try {
+            recognition.start();
+          } catch {
+            stopRecording();
+          }
+        } else {
+          stopRecording();
         }
       };
 
       recognition.start();
       speechRecognitionRef.current = recognition;
+      isRecordingVoiceRef.current = true;
       setIsRecordingVoice(true);
       setRecordingEngine("speech_api");
-      showToast("🎙 Listening... Speak into microphone to type text in real time.");
+      showToast("🎙 Live Voice Typing active! Speak into microphone.");
     } catch (e) {
-      console.warn("Speech recognition failed to initialize, trying MediaRecorder:", e);
-      startMediaRecorder();
+      console.warn("Speech recognition failed to initialize, switching to local Whisper:", e);
+      startWhisperRecording();
     }
   };
 
-  const stopRecording = () => {
-    if (speechRecognitionRef.current) {
-      try {
-        speechRecognitionRef.current.stop();
-      } catch {}
-      speechRecognitionRef.current = null;
-    }
+  const startRecording = async () => {
+    const SpeechRecognition =
+      typeof window !== "undefined" &&
+      ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
 
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch {}
-      mediaRecorderRef.current = null;
+    if (SpeechRecognition) {
+      startBrowserSpeechRecognition();
+    } else {
+      await startWhisperRecording();
     }
+  };
 
+  const stopRecording = async () => {
+    isRecordingVoiceRef.current = false;
     setIsRecordingVoice(false);
+    setModelLoadingPct(null);
+
+    if (sliceTimerRef.current) {
+      clearInterval(sliceTimerRef.current);
+      sliceTimerRef.current = null;
+    }
+
+    if (speechRecognitionRef.current) {
+      const rec = speechRecognitionRef.current;
+      speechRecognitionRef.current = null;
+      try {
+        rec.onend = null;
+        rec.onerror = null;
+        rec.stop();
+      } catch {}
+    }
+
+    const recorder = mediaRecorderRef.current;
+    mediaRecorderRef.current = null;
+    if (recorder && recorder.state !== "inactive") {
+      try {
+        recorder.stop();
+      } catch {}
+    }
+
+    if (mediaStreamRef.current) {
+      try {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      } catch {}
+      mediaStreamRef.current = null;
+    }
+
     setRecordingEngine(null);
+
+    const chunks = [...audioChunksRef.current];
+    audioChunksRef.current = [];
+
+    if (chunks.length > 0) {
+      try {
+        const finalBlob = new Blob(chunks, {
+          type: recorder?.mimeType || "audio/webm",
+        });
+        if (finalBlob.size > 1000) {
+          showToast("⏳ Finalizing transcription...");
+          isTranscribingRef.current = true;
+          setIsTranscribing(true);
+
+          const { transcribeAudioClient } = await import("@/lib/client-whisper");
+          const finalText = await transcribeAudioClient(finalBlob);
+          if (finalText) {
+            setInputText(initialTextRef.current + finalText);
+            showToast("✨ Voice dictation complete!");
+          }
+        }
+      } catch (err) {
+        console.warn("Final Whisper transcription error:", err);
+      } finally {
+        isTranscribingRef.current = false;
+        setIsTranscribing(false);
+      }
+    }
   };
 
   const toggleVoiceRecording = () => {

@@ -78,16 +78,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Client-side audio recording fallback transcript
-    return NextResponse.json({
-      text: `Voice Note Memo (Recorded Audio):
-Client: Western Pipeline Substation #7
-Location: 440 Route 99, Midland, TX
-Inspection findings: Primary oil pump showing weeping seal near flange. Main breaker housing operational. Thermal camera sweep normal.
-Budget estimate: $12,500 USD.
-Urgency: HIGH. Action: Schedule seal replacement within 24 hours.`,
-      engine: "Client Audio Recorder Engine",
-    });
+    // 3. No server-side Whisper API key configured
+    return NextResponse.json(
+      {
+        error:
+          "No server transcription API key configured (OPENAI_API_KEY or GROQ_API_KEY missing). Please use browser Speech Recognition (Live Voice Typing) or add API credentials.",
+      },
+      { status: 503 }
+    );
   } catch (error: any) {
     console.error("Transcription Handler Error:", error);
     return NextResponse.json(
