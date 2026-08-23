@@ -19,42 +19,43 @@ import {
   Volume2,
   Loader2,
   Zap,
+  Menu,
 } from "lucide-react";
 import { ChatMessage, InputType } from "@/types/chat";
 import { SiteInspection } from "@/types/inspection";
-import { ProviderType } from "@/lib/llm-provider";
+import { transcribeAudioBlobLocally } from "@/lib/browser-whisper";
 
 interface ChatViewProps {
   messages: ChatMessage[];
   onSendMessage: (text: string, inputType?: InputType) => void;
   loading: boolean;
-  provider: ProviderType;
   onOpenModal: (inspection: SiteInspection) => void;
   showToast: (msg: string) => void;
+  onOpenMobileSidebar?: () => void;
 }
 
 export default function ChatView({
   messages,
   onSendMessage,
   loading,
-  provider,
   onOpenModal,
   showToast,
+  onOpenMobileSidebar,
 }: ChatViewProps) {
   const [inputText, setInputText] = useState<string>("");
   const [isRecordingVoice, setIsRecordingVoice] = useState<boolean>(false);
-  const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
   const [transcriptionStatus, setTranscriptionStatus] = useState<string>("");
-  const [transcriptionProgress, setTranscriptionProgress] = useState<number | null>(null);
+  const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
+  const [wasRecordedNote, setWasRecordedNote] = useState<boolean>(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const initialTextRef = useRef<string>("");
-  const audioChunksRef = useRef<Blob[]>([]);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const speechRecognitionRef = useRef<any>(null);
+  const speechRecognitionTextRef = useRef<string>("");
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -74,37 +75,73 @@ export default function ChatView({
     };
   }, [isRecordingVoice]);
 
-  const startRecording = async (): Promise<boolean> => {
-    try {
-      if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-        showToast("⚠️ Microphone recording is not supported in this browser environment.");
-        return false;
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
       }
+      if (speechRecognitionRef.current) {
+        try {
+          speechRecognitionRef.current.stop();
+        } catch (e) {}
+      }
+    };
+  }, []);
 
+  const startRecording = async () => {
+    if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      showToast("Audio recording is not supported in this browser.");
+      return;
+    }
+
+    try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
-      audioChunksRef.current = [];
+      streamRef.current = stream;
 
-      const currentInput = inputText;
-      initialTextRef.current = currentInput
-        ? currentInput + (currentInput.endsWith(" ") || currentInput.endsWith("\n") ? "" : " ")
-        : "";
+      speechRecognitionTextRef.current = "";
+      const SpeechRecognition =
+        typeof window !== "undefined"
+          ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+          : null;
 
-      let mimeType = "";
-      if (typeof MediaRecorder !== "undefined") {
-        if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
-          mimeType = "audio/webm;codecs=opus";
-        } else if (MediaRecorder.isTypeSupported("audio/webm")) {
-          mimeType = "audio/webm";
-        } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
-          mimeType = "audio/mp4";
-        } else if (MediaRecorder.isTypeSupported("audio/ogg")) {
-          mimeType = "audio/ogg";
+      if (SpeechRecognition) {
+        try {
+          const recognition = new SpeechRecognition();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = "en-US";
+
+          recognition.onresult = (event: any) => {
+            let currentTranscript = "";
+            for (let i = 0; i < event.results.length; i++) {
+              currentTranscript += event.results[i][0].transcript + " ";
+            }
+            speechRecognitionTextRef.current = currentTranscript.trim();
+          };
+
+          recognition.onerror = (event: any) => {
+            console.warn("SpeechRecognition error:", event.error);
+          };
+
+          recognition.start();
+          speechRecognitionRef.current = recognition;
+        } catch (e) {
+          console.warn("SpeechRecognition initialization error:", e);
         }
       }
 
-      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      let options = {};
+      if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+        options = { mimeType: "audio/webm;codecs=opus" };
+      } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+        options = { mimeType: "audio/webm" };
+      } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+        options = { mimeType: "audio/mp4" };
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, options);
       mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
@@ -112,95 +149,100 @@ export default function ChatView({
         }
       };
 
-      mediaRecorder.start(250);
-      setIsRecordingVoice(true);
-      showToast("🎙 Recording voice note... Click 'Stop & Transcribe' when finished.");
+      mediaRecorder.onstop = async () => {
+        const mimeType = mediaRecorder.mimeType || "audio/webm";
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
 
-      return true;
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        }
+
+        if (audioBlob.size === 0) {
+          showToast("Recording was empty.");
+          return;
+        }
+
+        setIsTranscribing(true);
+        setTranscriptionStatus("Processing recorded audio...");
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          let transcript = speechRecognitionTextRef.current.trim();
+
+          if (!transcript) {
+            setTranscriptionStatus("Initializing Local Whisper AI...");
+            try {
+              transcript = await transcribeAudioBlobLocally(audioBlob, (prog) => {
+                setTranscriptionStatus(prog.message || "Transcribing audio locally...");
+              });
+            } catch (localErr: any) {
+              console.warn("Local whisper transcription failed, falling back to server API:", localErr);
+              setTranscriptionStatus("Falling back to server transcription...");
+
+              const formData = new FormData();
+              formData.append("file", audioBlob, "recording.webm");
+              const res = await fetch("/api/transcribe", {
+                method: "POST",
+                body: formData,
+              });
+
+              if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || "Server transcription failed.");
+              }
+
+              const data = await res.json();
+              transcript = data.text || "";
+            }
+          }
+
+          if (transcript.trim()) {
+            setInputText((prev) => (prev.trim() ? `${prev.trim()} ${transcript.trim()}` : transcript.trim()));
+            setWasRecordedNote(true);
+            showToast("Audio transcribed! Review your text and click 'Extract Record' to send.");
+          } else {
+            showToast("No speech detected in recorded audio.");
+          }
+        } catch (err: any) {
+          console.error("Transcription error:", err);
+          showToast(`Transcription error: ${err.message || err}`);
+        } finally {
+          setIsTranscribing(false);
+          setTranscriptionStatus("");
+        }
+      };
+
+      mediaRecorder.start(200);
+      setIsRecordingVoice(true);
+      showToast("Recording audio note... Speak clearly into your microphone.");
     } catch (err: any) {
-      console.warn("Failed to initialize microphone recording:", err);
-      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-        showToast("⚠️ Microphone permission denied. Please allow microphone access in browser settings.");
-      } else {
-        showToast(`⚠️ Microphone access error: ${err.message || err.name}`);
-      }
-      return false;
+      console.error("Failed to access microphone:", err);
+      showToast("Microphone access denied. Please allow microphone access in browser settings.");
     }
   };
 
-  const stopRecording = async () => {
+  const stopRecording = () => {
     setIsRecordingVoice(false);
-
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-
-    const recorder = mediaRecorderRef.current;
-    mediaRecorderRef.current = null;
-    if (recorder && recorder.state !== "inactive") {
+    if (speechRecognitionRef.current) {
       try {
-        recorder.stop();
-      } catch {}
+        speechRecognitionRef.current.stop();
+      } catch (e) {}
+      speechRecognitionRef.current = null;
     }
-
-    if (mediaStreamRef.current) {
-      try {
-        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-      } catch {}
-      mediaStreamRef.current = null;
-    }
-
-    const chunks = [...audioChunksRef.current];
-    audioChunksRef.current = [];
-
-    if (chunks.length > 0) {
-      const finalBlob = new Blob(chunks, {
-        type: recorder?.mimeType || "audio/webm",
-      });
-
-      if (finalBlob.size < 1000) {
-        showToast("⚠️ Voice note was too short. Please try speaking longer.");
-        return;
-      }
-
-      setIsTranscribing(true);
-      setTranscriptionStatus("Initializing local Whisper Tiny model...");
-      setTranscriptionProgress(0);
-      showToast("⏳ Transcribing voice note locally in browser (WASM/WebGPU)...");
-
-      try {
-        const { transcribeAudioBlobLocally } = await import("@/lib/browser-whisper");
-        const transcribedText = await transcribeAudioBlobLocally(finalBlob, (progress) => {
-          setTranscriptionStatus(progress.message || "Transcribing audio locally...");
-          setTranscriptionProgress(Math.round(progress.progress * 100));
-        });
-
-        if (transcribedText) {
-          setInputText((prev) => {
-            const base = initialTextRef.current || prev;
-            const prefix = base ? (base.endsWith(" ") || base.endsWith("\n") ? base : base + " ") : "";
-            return prefix + transcribedText;
-          });
-          showToast("✨ Voice note transcribed successfully!");
-        } else {
-          showToast("⚠️ No speech detected in recorded audio.");
-        }
-      } catch (err: any) {
-        console.error("Local Whisper transcription error:", err);
-        showToast(`⚠️ Local transcription error: ${err.message || "Failed to process audio"}`);
-      } finally {
-        setIsTranscribing(false);
-        setTranscriptionStatus("");
-        setTranscriptionProgress(null);
-      }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
     }
   };
 
   const toggleVoiceRecording = () => {
+    if (isTranscribing) return;
     if (isRecordingVoice) {
       stopRecording();
-    } else if (!isTranscribing) {
+    } else {
       startRecording();
     }
   };
@@ -210,8 +252,9 @@ export default function ChatView({
     if (isRecordingVoice) {
       stopRecording();
     }
-    onSendMessage(inputText.trim(), isRecordingVoice ? "voice" : "text");
+    onSendMessage(inputText.trim(), wasRecordedNote ? "voice" : "text");
     setInputText("");
+    setWasRecordedNote(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -297,38 +340,26 @@ export default function ChatView({
           <div className="flex items-center gap-3">
             <div className="w-3 h-3 rounded-full bg-red-600 animate-ping" />
             <span className="text-xs font-bold text-red-900">
-              🎙 Recording Voice Note ({recordingSeconds}s)... Speak clearly into your microphone.
+              Recording Voice Note ({recordingSeconds}s)... Click 'Stop Recording' when finished.
             </span>
           </div>
           <button
             type="button"
-            onClick={toggleVoiceRecording}
+            onClick={stopRecording}
             className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 shadow-sm flex items-center gap-1.5"
           >
             <Square className="w-3 h-3 fill-current" />
-            <span>Stop & Transcribe</span>
+            <span>Stop Recording</span>
           </button>
         </div>
       )}
 
       {isTranscribing && (
-        <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
-            <div>
-              <span className="text-xs font-bold text-blue-900 block">
-                ⚡ Local Whisper AI (Browser WASM/WebGPU)
-              </span>
-              <span className="text-[11px] text-blue-700">
-                {transcriptionStatus || "Transcribing audio locally..."}
-              </span>
-            </div>
-          </div>
-          {transcriptionProgress !== null && (
-            <div className="text-xs font-mono font-bold text-blue-800 bg-blue-100 px-2.5 py-1 rounded-full border border-blue-300">
-              {transcriptionProgress}%
-            </div>
-          )}
+        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center gap-3">
+          <Loader2 className="w-4 h-4 text-emerald-600 animate-spin shrink-0" />
+          <span className="text-xs font-bold text-emerald-900">
+            {transcriptionStatus || "Transcribing audio note..."}
+          </span>
         </div>
       )}
 
@@ -337,9 +368,9 @@ export default function ChatView({
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={isTranscribing}
           rows={centered ? 4 : 3}
-          placeholder="Type, paste inspection text, or click 'Record Voice Note' to transcribe audio locally..."
+          disabled={isTranscribing}
+          placeholder="Type or paste site inspection details, or click 'Record Audio' to record a voice note..."
           className="w-full bg-transparent p-1.5 text-sm sm:text-base font-mono leading-relaxed text-neutral-900 placeholder:text-neutral-400 outline-none resize-none disabled:opacity-50"
         />
 
@@ -353,24 +384,24 @@ export default function ChatView({
                 isRecordingVoice
                   ? "bg-red-600 text-white animate-pulse"
                   : isTranscribing
-                  ? "bg-neutral-100 text-neutral-400 cursor-not-allowed opacity-60"
+                  ? "bg-neutral-100 border border-neutral-200 text-neutral-400 cursor-not-allowed"
                   : "bg-neutral-100 border border-neutral-200 text-neutral-700 hover:bg-neutral-200"
               }`}
-              title="Record voice note for local Whisper AI transcription"
+              title="Record an audio note, transcribe it locally, and review before sending"
             >
               {isRecordingVoice ? (
                 <Square className="w-3.5 h-3.5 fill-current" />
               ) : isTranscribing ? (
-                <Loader2 className="w-4 h-4 animate-spin text-neutral-500" />
+                <Loader2 className="w-4 h-4 text-emerald-500 animate-spin" />
               ) : (
                 <Mic className="w-4 h-4 text-red-500" />
               )}
               <span className="hidden sm:inline">
                 {isRecordingVoice
-                  ? "Stop & Transcribe"
+                  ? `Stop Recording (${recordingSeconds}s)`
                   : isTranscribing
                   ? "Transcribing..."
-                  : "Record Voice Note"}
+                  : "Record Audio"}
               </span>
             </button>
           </div>
@@ -378,9 +409,9 @@ export default function ChatView({
           <div className="flex items-center gap-2">
             <button
               onClick={handleSend}
-              disabled={loading || !inputText.trim() || isTranscribing}
+              disabled={loading || isTranscribing || !inputText.trim()}
               className={`px-5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-                loading || !inputText.trim() || isTranscribing
+                loading || isTranscribing || !inputText.trim()
                   ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                   : "bg-black text-white hover:bg-neutral-800 shadow-md active:scale-95"
               }`}
@@ -396,10 +427,17 @@ export default function ChatView({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#fcfcfc] overflow-hidden">
-      
-      {/* Top Bar Header */}
       <div className="px-6 py-4 border-b border-neutral-200 bg-white flex items-center justify-between shrink-0 shadow-2xs">
         <div className="flex items-center gap-3">
+          {onOpenMobileSidebar && (
+            <button
+              onClick={onOpenMobileSidebar}
+              className="md:hidden p-2 rounded-xl border border-neutral-200 text-neutral-700 hover:bg-neutral-100 transition-all"
+              aria-label="Open sidebar menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
           <div className="p-2 rounded-xl bg-neutral-900 text-white">
             <Sparkles className="w-4 h-4 text-emerald-400" />
           </div>
@@ -408,19 +446,11 @@ export default function ChatView({
             <p className="text-[11px] text-neutral-500">Unstructured Text & Voice Notes to Structured Schema</p>
           </div>
         </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-700">
-            Provider: <strong className="text-black uppercase">{provider}</strong>
-          </span>
-        </div>
       </div>
 
-      {/* Main Chat Area */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 flex flex-col">
         {messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center max-w-2xl mx-auto w-full py-8 space-y-8 animate-in fade-in duration-300 text-center">
-            {/* Quote Header */}
             <div className="space-y-3 px-4">
               <blockquote className="text-lg sm:text-xl italic font-serif text-neutral-800 leading-relaxed">
                 “Transforming unstructured chaos into operational clarity.”
@@ -430,7 +460,6 @@ export default function ChatView({
               </p>
             </div>
 
-            {/* Centered Text Box */}
             {renderInputBox(true)}
           </div>
         ) : (
@@ -460,23 +489,25 @@ export default function ChatView({
                 </div>
               ) : (
                 <div className="max-w-3xl w-full bg-white border border-neutral-200 rounded-2xl rounded-tl-none p-5 space-y-4 shadow-md">
-                  
-                  {/* Assistant Header & Execution Telemetry */}
                   <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
                     <div className="flex items-center gap-2">
-                      <span className={`p-1 rounded-md ${msg.fallbackUsed ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
-                        <CheckCircle2 className={`w-4 h-4 ${msg.fallbackUsed ? "text-amber-600" : "text-emerald-600"}`} />
+                      <span className={`p-1 rounded-md ${msg.fallbackUsed ? "bg-amber-100 text-amber-800 border border-amber-200" : "bg-emerald-100 text-emerald-800 border border-emerald-200"}`}>
+                        {msg.fallbackUsed ? (
+                          <AlertTriangle className="w-4 h-4 text-amber-600" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        )}
                       </span>
-                      <span className="text-xs font-bold text-neutral-900">
-                        {msg.fallbackUsed ? "Extraction Completed (Fallback Engine)" : "Extraction Completed"}
+                      <span className="text-xs font-extrabold text-neutral-900">
+                        {msg.fallbackUsed ? "AI Extraction Failed (Fast Fallback Applied)" : "AI Extraction Completed"}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2">
                       {msg.fallbackUsed ? (
-                        <span className="px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-medium flex items-center gap-1" title={msg.warning || "Fallback engine used"}>
+                        <span className="px-2.5 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-900 text-[10px] font-bold flex items-center gap-1" title={msg.warning || "Fallback engine used"}>
                           <Zap className="w-3 h-3 text-amber-600" />
-                          Fallback Engine Used
+                          Fast Rule-Based Fallback
                         </span>
                       ) : (
                         <span className="px-2.5 py-0.5 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-700 text-[10px] font-mono">
@@ -487,17 +518,17 @@ export default function ChatView({
                   </div>
 
                   {msg.warning && msg.fallbackUsed && (
-                    <div className="px-3 py-1.5 rounded-lg bg-amber-50/80 border border-amber-200/70 text-amber-900 text-[11px] flex items-center gap-2">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                      <span className="truncate">{msg.warning}</span>
+                    <div className="px-3.5 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 shadow-2xs">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <p className="font-bold text-amber-950">AI Model Timeout / Unreachable</p>
+                        <p className="text-[11px] text-amber-800 leading-snug">{msg.warning}</p>
+                      </div>
                     </div>
                   )}
 
-                  {/* Extraction Summary Item Card in Chat */}
                   {msg.parsedData && (
                     <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4 space-y-4">
-                      
-                      {/* Top Bar of Card */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-200">
                         <div>
                           <div className="flex items-center gap-2">
@@ -505,7 +536,13 @@ export default function ChatView({
                             {getUrgencyBadge(msg.parsedData.urgencyLevel, msg.fallbackUsed)}
                           </div>
                           <h3 className="text-base font-extrabold text-neutral-900 mt-0.5">
-                            {msg.parsedData.clientName || <span className="text-neutral-400 font-normal italic">Client information unavailable</span>}
+                            {!msg.parsedData.clientName || msg.parsedData.clientName === "Client name not detected" || msg.parsedData.clientName === "Unknown Client" ? (
+                              <span className="text-amber-800/80 bg-amber-50 px-2 py-0.5 rounded text-xs font-medium italic border border-amber-200/60 inline-flex items-center gap-1">
+                                Client name not detected
+                              </span>
+                            ) : (
+                              msg.parsedData.clientName
+                            )}
                           </h3>
                         </div>
 
@@ -527,11 +564,16 @@ export default function ChatView({
                         </div>
                       </div>
 
-                      {/* Summary Data Grid */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                         <div className="flex items-center gap-2 text-neutral-700">
                           <MapPin className="w-4 h-4 text-neutral-400 shrink-0" />
-                          <span className="truncate">{msg.parsedData.siteAddress || <span className="text-neutral-400 italic">Address not provided</span>}</span>
+                          <span className="truncate">
+                            {!msg.parsedData.siteAddress || msg.parsedData.siteAddress === "Address not detected" || msg.parsedData.siteAddress === "Address Not Provided" ? (
+                              <span className="text-neutral-400 italic">Address not detected</span>
+                            ) : (
+                              msg.parsedData.siteAddress
+                            )}
+                          </span>
                         </div>
 
                         <div className="flex items-center gap-2 text-neutral-700">
@@ -547,11 +589,13 @@ export default function ChatView({
                         </div>
                       </div>
 
-                      {/* Equipment Summary List Pills */}
                       <div className="pt-2 border-t border-neutral-200/60 flex flex-wrap items-center gap-2">
                         <span className="text-[11px] font-bold text-neutral-500 uppercase">Equipment Extracted:</span>
                         {msg.parsedData.equipmentNotes.length === 0 ? (
-                          <span className="text-xs text-neutral-400 italic">No equipment issues detected</span>
+                          <span className="text-xs text-neutral-400 italic flex items-center gap-1">
+                            <Wrench className="w-3 h-3 text-neutral-300" />
+                            No equipment items detected
+                          </span>
                         ) : (
                           msg.parsedData.equipmentNotes.map((item, idx) => (
                             <span
@@ -574,7 +618,6 @@ export default function ChatView({
                     </div>
                   )}
 
-                  {/* Actions Bar */}
                   {msg.parsedData && (
                     <div className="flex items-center justify-between pt-1 text-xs">
                       <button
@@ -604,7 +647,6 @@ export default function ChatView({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Chat Area - only shown at bottom when messages exist */}
       {messages.length > 0 && (
         <div className="p-4 border-t border-neutral-200 bg-white shrink-0 shadow-lg">
           {renderInputBox(false)}

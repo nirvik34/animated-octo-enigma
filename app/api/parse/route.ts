@@ -17,6 +17,7 @@ export async function POST(req: Request) {
     rawText = body.rawText || "";
     const providerOverride = body.providerOverride as ProviderType | "fallback" | undefined;
     const forceFallback = body.forceFallback === true || providerOverride === "fallback";
+    const apiKeys = body.apiKeys || {};
 
     if (!rawText || typeof rawText !== "string" || !rawText.trim()) {
       return NextResponse.json(
@@ -25,7 +26,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Direct Instant Fallback Mode (< 10ms execution)
     if (forceFallback) {
       const fallbackData = fastFallbackParse(rawText);
       const executionMs = Date.now() - startTime;
@@ -40,26 +40,23 @@ export async function POST(req: Request) {
 
     const requestedProvider = (providerOverride || process.env.LLM_PROVIDER || "ollama").toLowerCase() as ProviderType;
 
-    // 1. Check provider health & detect installed models
-    const health = await checkProviderHealth(requestedProvider);
+    const health = await checkProviderHealth(requestedProvider, undefined, apiKeys);
     if (!health.ok) {
-      // Automatic failover to Heuristic Fallback when provider health check fails
       const fallbackData = fastFallbackParse(rawText);
       const executionMs = Date.now() - startTime;
       return NextResponse.json({
         success: true,
         data: fallbackData,
-        provider: `${requestedProvider} (Failed -> Fallback)`,
+        provider: `${requestedProvider} (Unavailable -> Fallback)`,
         modelName: `Instant Heuristic Engine (${executionMs}ms)`,
         fallbackUsed: true,
-        warning: `Primary provider '${requestedProvider}' unavailable (${health.message}). Automatically recovered using Fast Fallback Engine.`,
+        warning: `The AI provider '${requestedProvider}' is currently unreachable. A basic record was generated using keyword rules. Please review and edit the fields below.`,
       });
     }
 
-    // 2. Get LLM provider configuration using the verified available model
     let providerConfig;
     try {
-      providerConfig = getLLMProviderConfig(requestedProvider, health.availableModel);
+      providerConfig = getLLMProviderConfig(requestedProvider, health.availableModel, apiKeys);
     } catch (configErr: any) {
       return NextResponse.json(
         { error: configErr.message || "Invalid provider configuration." },
@@ -73,8 +70,8 @@ export async function POST(req: Request) {
 Your job is to read raw, messy, unformatted inspection logs (voice memo transcripts, emails, field notes, emergency reports) and convert them into a clean JSON structure adhering strictly to the schema provided.
 
 Rules for Extraction:
-1. Client Name: Extract company or client name if present. Fall back to "Unknown Client".
-2. Site Address: Extract full physical address or site location. Fall back to "Address Not Provided".
+1. Client Name: Extract company or client name if present. Fall back to "Client name not detected".
+2. Site Address: Extract full physical address or site location. Fall back to "Address not detected".
 3. Inspection Date: Extract date if mentioned; otherwise default to today's date format (YYYY-MM-DD).
 4. Budget Estimate: Extract monetary values mentioned for repairs, maintenance, or budget. If none, return null. Extract currency code (e.g. USD, EUR, GBP, CAD).
 5. Urgency Level: Infer level ('low', 'medium', 'high', 'critical') based on keywords like "immediate", "emergency", "corroded", "failed", "routine", "hazard", "leaking".
@@ -82,9 +79,8 @@ Rules for Extraction:
 7. Key Observations: Extract distinct factual findings, safety issues, or physical conditions as an array of strings.
 8. Next Steps: Extract recommended follow-up actions, maintenance orders, or scheduling items as an array of clear actionable strings.`;
 
-    // LLM with 8 second timeout + automatic fallback recovery
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("LLM processing timeout exceeded (8s)")), 8000)
+      setTimeout(() => reject(new Error("AI response timeout limit exceeded (8s)")), 8000)
     );
 
     const parsePromise = generateObject({
@@ -106,10 +102,14 @@ Rules for Extraction:
   } catch (error: any) {
     console.warn("LLM Extraction failed or timed out. Falling back to Instant Heuristic Engine:", error.message);
 
-    // High-speed fallback recovery
     if (rawText && rawText.trim()) {
       const fallbackData = fastFallbackParse(rawText);
       const executionMs = Date.now() - startTime;
+
+      const isTimeout = error.message?.includes("timeout");
+      const userWarning = isTimeout
+        ? "AI response timed out (8s limit). A basic record was generated using keyword rules. Please review and edit the fields below."
+        : "AI model encountered an error during processing. A basic record was generated using keyword rules. Please review and edit the fields below.";
 
       return NextResponse.json({
         success: true,
@@ -117,7 +117,7 @@ Rules for Extraction:
         provider: "fallback",
         modelName: `Instant Heuristic Engine (${executionMs}ms)`,
         fallbackUsed: true,
-        warning: `LLM parsing failed or timed out (${error.message}). Recovered using Instant Heuristic Fallback Engine.`,
+        warning: userWarning,
       });
     }
 

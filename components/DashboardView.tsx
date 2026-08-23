@@ -18,7 +18,8 @@ import {
   FileText,
   Plus,
   Copy,
-  Briefcase
+  Briefcase,
+  Menu,
 } from "lucide-react";
 import { InspectionRecordItem } from "@/lib/sample-records";
 import { SiteInspection } from "@/types/inspection";
@@ -28,6 +29,7 @@ interface DashboardViewProps {
   onOpenModal: (inspection: SiteInspection) => void;
   showToast: (msg: string) => void;
   onNewInspection: () => void;
+  onOpenMobileSidebar?: () => void;
 }
 
 export default function DashboardView({
@@ -35,6 +37,7 @@ export default function DashboardView({
   onOpenModal,
   showToast,
   onNewInspection,
+  onOpenMobileSidebar,
 }: DashboardViewProps) {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [urgencyFilter, setUrgencyFilter] = useState<string>("all");
@@ -143,20 +146,30 @@ export default function DashboardView({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#fcfcfc] overflow-y-auto">
-      {/* Top Bar Header */}
       <div className="px-6 py-5 border-b border-neutral-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0 shadow-2xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg font-extrabold text-[#0b0b0b] tracking-tight">
-              Site Inspection Records Dashboard
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-black text-white text-[11px] font-bold">
-              {records.length} Total
-            </span>
+        <div className="flex items-center gap-3">
+          {onOpenMobileSidebar && (
+            <button
+              onClick={onOpenMobileSidebar}
+              className="md:hidden p-2 rounded-xl border border-neutral-200 text-neutral-700 hover:bg-neutral-100 transition-all shrink-0"
+              aria-label="Open sidebar menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-extrabold text-[#0b0b0b] tracking-tight">
+                Site Inspection Records Dashboard
+              </h1>
+              <span className="px-2.5 py-0.5 rounded-full bg-black text-white text-[11px] font-bold">
+                {records.length} Total
+              </span>
+            </div>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              Click any record item to view/edit full pop-up card modal or download clean JSON.
+            </p>
           </div>
-          <p className="text-xs text-neutral-500 mt-0.5">
-            Click any record item to view/edit full pop-up card modal or download clean JSON.
-          </p>
         </div>
 
         <button
@@ -168,10 +181,7 @@ export default function DashboardView({
         </button>
       </div>
 
-      {/* Main Content Area */}
       <div className="p-6 space-y-6 max-w-7xl w-full mx-auto">
-        
-        {/* KPI Telemetry Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-1 shadow-2xs">
             <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest block">
@@ -203,7 +213,6 @@ export default function DashboardView({
           </div>
         </div>
 
-        {/* Filter & Search Bar */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-3 rounded-2xl border border-neutral-200 shadow-2xs">
           <div className="relative w-full sm:w-80">
             <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
@@ -234,7 +243,6 @@ export default function DashboardView({
           </div>
         </div>
 
-        {/* Records List */}
         <div className="space-y-3">
           {records.length === 0 ? (
             <div className="p-12 text-center bg-white border border-neutral-200 rounded-2xl space-y-4 shadow-2xs">
@@ -318,7 +326,6 @@ export default function DashboardView({
                     </div>
                   </div>
 
-                  {/* Summary Details */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                     <div className="flex items-center gap-2 text-neutral-700">
                       <MapPin className="w-4 h-4 text-neutral-400 shrink-0" />
@@ -338,7 +345,6 @@ export default function DashboardView({
                     </div>
                   </div>
 
-                  {/* Equipment summary tag pills */}
                   <div className="pt-2 border-t border-neutral-100 flex flex-wrap items-center gap-2">
                     <span className="text-[10px] font-bold text-neutral-400 uppercase">Equipment ({data.equipmentNotes.length}):</span>
                     {data.equipmentNotes.length === 0 ? (

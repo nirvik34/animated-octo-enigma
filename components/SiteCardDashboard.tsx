@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Sidebar from "@/components/Sidebar";
 import ChatView from "@/components/ChatView";
 import DashboardView from "@/components/DashboardView";
 import SiteInspectionModal from "@/components/SiteInspectionModal";
+import SettingsModal, { CustomApiKeys } from "@/components/SettingsModal";
 import { ProviderType } from "@/lib/llm-provider";
 import { SiteInspection, EMPTY_SITE_INSPECTION } from "@/types/inspection";
 import { ChatMessage, InputType } from "@/types/chat";
@@ -16,13 +17,35 @@ export default function SiteCardDashboard() {
   const [records, setRecords] = useState<InspectionRecordItem[]>(INITIAL_RECORDS);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
-
   const [loading, setLoading] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [modalInspection, setModalInspection] = useState<SiteInspection>(EMPTY_SITE_INSPECTION);
+
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
+  const [savedKeys, setSavedKeys] = useState<CustomApiKeys>({});
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("saniti_api_keys");
+      if (stored) {
+        setSavedKeys(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error("Failed to parse saved API keys from localStorage:", e);
+    }
+  }, []);
+
+  const handleSaveKeys = (keys: CustomApiKeys) => {
+    setSavedKeys(keys);
+    try {
+      localStorage.setItem("saniti_api_keys", JSON.stringify(keys));
+    } catch (e) {
+      console.error("Failed to save API keys to localStorage:", e);
+    }
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -38,7 +61,6 @@ export default function SiteCardDashboard() {
 
   const handleSaveModalInspection = (updated: SiteInspection) => {
     setModalInspection(updated);
-    // Update matching record in records list if present
     setRecords((prev) =>
       prev.map((rec) => {
         if (
@@ -75,6 +97,7 @@ export default function SiteCardDashboard() {
         body: JSON.stringify({
           rawText: text,
           providerOverride: provider,
+          apiKeys: savedKeys,
         }),
       });
 
@@ -101,7 +124,6 @@ export default function SiteCardDashboard() {
 
       setChatMessages((prev) => [...prev, assistantMessage]);
 
-      // Automatically add new record to Inspection Records Dashboard!
       const newRecordItem: InspectionRecordItem = {
         id: `rec-${Date.now().toString().slice(-4)}`,
         createdAt: new Date().toISOString(),
@@ -131,8 +153,6 @@ export default function SiteCardDashboard() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#0b0b0b] text-neutral-900 selection:bg-[#f36458] selection:text-black font-sans">
-      
-      {/* Toast Notification Container */}
       {toastMessage && (
         <div className="fixed top-5 right-5 z-70 bg-black text-white text-xs font-bold px-4 py-3 rounded-2xl shadow-2xl border border-neutral-800 flex items-center gap-2 animate-in slide-in-from-top-3 duration-200">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
@@ -140,25 +160,26 @@ export default function SiteCardDashboard() {
         </div>
       )}
 
-      {/* Sidebar Navigation */}
       <Sidebar
         activeTab={activeTab}
         onTabChange={setActiveTab}
         recordCount={records.length}
         provider={provider}
         onProviderChange={setProvider}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        isOpenMobile={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
 
-      {/* Main Workspace View */}
       <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#fcfcfc]">
         {activeTab === "chat" ? (
           <ChatView
             messages={chatMessages}
             onSendMessage={handleSendMessage}
             loading={loading}
-            provider={provider}
             onOpenModal={handleOpenModal}
             showToast={showToast}
+            onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
           />
         ) : (
           <DashboardView
@@ -166,16 +187,24 @@ export default function SiteCardDashboard() {
             onOpenModal={handleOpenModal}
             showToast={showToast}
             onNewInspection={() => setActiveTab("chat")}
+            onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
           />
         )}
       </main>
 
-      {/* Card Pop-Up Modal */}
       <SiteInspectionModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         inspection={modalInspection}
         onSave={handleSaveModalInspection}
+        showToast={showToast}
+      />
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        savedKeys={savedKeys}
+        onSaveKeys={handleSaveKeys}
         showToast={showToast}
       />
     </div>

@@ -13,9 +13,6 @@ export function getActiveDevice(): "webgpu" | "wasm" | "cpu" {
   return "wasm";
 }
 
-/**
- * Legacy compatibility wrapper forwarding audio transcription to lib/browser-whisper.ts.
- */
 export async function transcribeAudioClient(
   audioInput: Blob | Float32Array,
   onProgress?: (info: TranscriberProgress) => void
@@ -32,3 +29,4 @@ export async function transcribeAudioClient(
   }
   return "";
 }
+

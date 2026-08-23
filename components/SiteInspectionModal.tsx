@@ -219,8 +219,6 @@ export default function SiteInspectionModal({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
       <div className="bg-white border border-neutral-200 rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-        
-        {/* Modal Header */}
         <div className="px-6 py-5 border-b border-neutral-200 flex items-center justify-between bg-neutral-50/80 shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-black text-white">
@@ -268,10 +266,7 @@ export default function SiteInspectionModal({
           </div>
         </div>
 
-        {/* Modal Body */}
         <div className="p-6 space-y-6 overflow-y-auto flex-1">
-          
-          {/* Metadata Section */}
           <div className="bg-neutral-50 border border-neutral-200 rounded-2xl p-5 space-y-4">
             <div className="text-xs font-bold text-neutral-900 uppercase tracking-wider flex items-center justify-between">
               <span>Site & Operational Metadata</span>
@@ -383,7 +378,6 @@ export default function SiteInspectionModal({
             )}
           </div>
 
-          {/* Equipment Status Overview */}
           <div className="space-y-3">
             <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
               <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider flex items-center gap-2">
@@ -473,10 +467,7 @@ export default function SiteInspectionModal({
             </div>
           </div>
 
-          {/* Observations & Next Steps Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Key Observations */}
             <div className="space-y-3">
               <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
                 <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider">Key Field Findings</h3>
@@ -516,7 +507,6 @@ export default function SiteInspectionModal({
               </div>
             </div>
 
-            {/* Action Items */}
             <div className="space-y-3">
               <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
                 <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider">Action Plan & Next Steps</h3>
@@ -560,7 +550,6 @@ export default function SiteInspectionModal({
           </div>
         </div>
 
-        {/* Modal Footer / Action Bar */}
         <div className="px-6 py-4 border-t border-neutral-200 bg-neutral-50 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2">
             <button
@@ -602,7 +591,6 @@ export default function SiteInspectionModal({
         </div>
       </div>
 
-      {/* Work Order Prompt Modal */}
       {selectedEquipmentForWorkOrder && (
         <div className="fixed inset-0 z-60 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white border border-neutral-200 rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl animate-in zoom-in-95">

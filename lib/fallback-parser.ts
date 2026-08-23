@@ -1,35 +1,26 @@
 import { SiteInspection, EquipmentNote, UrgencyLevel } from "@/types/inspection";
 
-/**
- * Fast Rule-Based / Heuristic Fallback Parser
- * Executes in < 10ms with zero network latency.
- * Used automatically when LLM times out or is unreachable.
- */
 export function fastFallbackParse(rawText: string): SiteInspection {
   const text = rawText.trim();
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
 
-  // 1. Client Name
-  let clientName = "Unknown Client";
+  let clientName = "Client name not detected";
   const clientMatch = text.match(/(?:Client|Customer|Company|For):\s*([^\n\r]+)/i);
   if (clientMatch && clientMatch[1]) {
     clientName = clientMatch[1].trim();
   }
 
-  // 2. Site Address
-  let siteAddress = "Address Not Provided";
+  let siteAddress = "Address not detected";
   const addressMatch = text.match(/(?:Site Location|Site|Address|Location):\s*([^\n\r]+)/i);
   if (addressMatch && addressMatch[1]) {
     siteAddress = addressMatch[1].trim();
   } else {
-    // Street address pattern fallback
     const streetPattern = text.match(/\b\d{1,5}\s+[A-Za-z0-9\s,\.]+(?:Street|St|Avenue|Ave|Parkway|Pkwy|Highway|Hwy|Road|Rd|Drive|Dr|Boulevard|Blvd|Lane|Ln|Dock\s*\d+)[^\n\r]*/i);
     if (streetPattern) {
       siteAddress = streetPattern[0].trim();
     }
   }
 
-  // 3. Inspection Date
   let inspectionDate = new Date().toISOString().split("T")[0];
   const dateMatch = text.match(/(?:Date|Inspection Date|Audit Date):\s*([^\n\r]+)/i);
   if (dateMatch && dateMatch[1]) {
@@ -47,7 +38,6 @@ export function fastFallbackParse(rawText: string): SiteInspection {
     }
   }
 
-  // 4. Budget Estimate & Currency
   let budgetEstimate: number | null = null;
   let currency = "USD";
 
@@ -68,7 +58,6 @@ export function fastFallbackParse(rawText: string): SiteInspection {
     }
   }
 
-  // 5. Urgency Level
   let urgencyLevel: UrgencyLevel = "medium";
   const upperText = text.toUpperCase();
   if (upperText.includes("CRITICAL") || upperText.includes("SHUTDOWN") || upperText.includes("EVACUATE") || upperText.includes("HAZARD")) {
@@ -79,14 +68,12 @@ export function fastFallbackParse(rawText: string): SiteInspection {
     urgencyLevel = "low";
   }
 
-  // 6. Equipment Notes
   const equipmentNotes: EquipmentNote[] = [];
   const bulletLines = lines.filter((l) => l.startsWith("*") || l.startsWith("-") || l.startsWith("•"));
 
   for (const line of bulletLines) {
     const cleanLine = line.replace(/^[\*\-•]\s*/, "");
     
-    // Check if line describes equipment or status
     let status: "operational" | "needs_repair" | "replace" | "unknown" = "unknown";
     const lineUpper = cleanLine.toUpperCase();
 
@@ -98,7 +85,6 @@ export function fastFallbackParse(rawText: string): SiteInspection {
       status = "operational";
     }
 
-    // Extract name (part before colon, status, or verb)
     let name = cleanLine;
     const colonIdx = cleanLine.indexOf(":");
     if (colonIdx > 0 && colonIdx < 40) {
@@ -117,7 +103,6 @@ export function fastFallbackParse(rawText: string): SiteInspection {
     });
   }
 
-  // 7. Key Observations & 8. Next Steps
   const keyObservations: string[] = [];
   const nextSteps: string[] = [];
 
@@ -144,7 +129,6 @@ export function fastFallbackParse(rawText: string): SiteInspection {
     }
   }
 
-  // Fallbacks if section headings were missing
   if (keyObservations.length === 0 && bulletLines.length > 0) {
     keyObservations.push(...bulletLines.slice(0, 3).map((l) => l.replace(/^[\*\-•]\s*/, "")));
   }
@@ -166,3 +150,4 @@ export function fastFallbackParse(rawText: string): SiteInspection {
     nextSteps,
   };
 }
+

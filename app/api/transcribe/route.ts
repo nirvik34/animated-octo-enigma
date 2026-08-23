@@ -15,7 +15,6 @@ export async function POST(req: NextRequest) {
     const openaiApiKey = process.env.OPENAI_API_KEY;
     const groqApiKey = process.env.GROQ_API_KEY;
 
-    // 1. Try OpenAI Whisper API if key is available
     if (openaiApiKey && openaiApiKey.trim() !== "") {
       try {
         const whisperFormData = new FormData();
@@ -47,7 +46,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. Try Groq Whisper API if key is available
     if (groqApiKey && groqApiKey.trim() !== "") {
       try {
         const groqFormData = new FormData();
@@ -78,7 +76,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. No server-side Whisper API key configured
     return NextResponse.json(
       {
         error:

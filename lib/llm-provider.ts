@@ -2,7 +2,14 @@ import { createOllama } from "ollama-ai-provider";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 
-export type ProviderType = "ollama" | "openai" | "google";
+export type ProviderType = "ollama" | "openai" | "google" | "groq";
+
+export interface CustomApiKeys {
+  openaiApiKey?: string;
+  googleApiKey?: string;
+  groqApiKey?: string;
+  ollamaBaseUrl?: string;
+}
 
 export interface ProviderConfig {
   provider: ProviderType;
@@ -12,7 +19,8 @@ export interface ProviderConfig {
 
 export function getLLMProviderConfig(
   providerOverride?: ProviderType,
-  modelOverrideName?: string
+  modelOverrideName?: string,
+  customApiKeys?: CustomApiKeys
 ): ProviderConfig {
   const provider = (
     providerOverride ||
@@ -21,10 +29,10 @@ export function getLLMProviderConfig(
   ).toLowerCase() as ProviderType;
 
   if (provider === "openai") {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = customApiKeys?.openaiApiKey || process.env.OPENAI_API_KEY;
     if (!apiKey) {
       throw new Error(
-        "OpenAI API Key is missing. Set OPENAI_API_KEY in your environment variables or choose Ollama for local mode."
+        "OpenAI API Key is missing. Add your API key in Settings or set OPENAI_API_KEY in environment variables."
       );
     }
     const modelName = modelOverrideName || process.env.OPENAI_MODEL || "gpt-4o-mini";
@@ -38,10 +46,12 @@ export function getLLMProviderConfig(
 
   if (provider === "google") {
     const apiKey =
-      process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
+      customApiKeys?.googleApiKey ||
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+      process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error(
-        "Google AI Key is missing. Set GOOGLE_GENERATIVE_AI_API_KEY in your environment variables or choose Ollama for local mode."
+        "Google Gemini API Key is missing. Add your API key in Settings or set GOOGLE_GENERATIVE_AI_API_KEY in environment variables."
       );
     }
     const modelName = modelOverrideName || process.env.GOOGLE_MODEL || "gemini-1.5-flash";
@@ -53,10 +63,29 @@ export function getLLMProviderConfig(
     };
   }
 
-  const rawBaseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+  if (provider === "groq") {
+    const apiKey = customApiKeys?.groqApiKey || process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        "Groq API Key is missing. Add your API key in Settings or set GROQ_API_KEY in environment variables."
+      );
+    }
+    const modelName = modelOverrideName || process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+    const groqOpenAI = createOpenAI({
+      baseURL: "https://api.groq.com/openai/v1",
+      apiKey,
+    });
+    return {
+      provider: "groq",
+      modelName,
+      model: groqOpenAI(modelName),
+    };
+  }
+
+  const rawBaseUrl = customApiKeys?.ollamaBaseUrl || process.env.OLLAMA_BASE_URL || "http://localhost:11434";
   const modelName = modelOverrideName || process.env.OLLAMA_MODEL || "deepseek-coder:6.7b";
   const normalizedBase = rawBaseUrl.replace(/\/$/, "").replace(/\/v1$/, "").replace(/\/api$/, "");
-  
+
   const ollamaOpenAI = createOpenAI({
     baseURL: `${normalizedBase}/v1`,
     apiKey: "ollama",
@@ -71,34 +100,47 @@ export function getLLMProviderConfig(
 
 export async function checkProviderHealth(
   provider: ProviderType,
-  requestedModelName?: string
+  requestedModelName?: string,
+  customApiKeys?: CustomApiKeys
 ): Promise<{ ok: boolean; message?: string; availableModel?: string }> {
   if (provider === "openai") {
-    if (!process.env.OPENAI_API_KEY) {
+    const apiKey = customApiKeys?.openaiApiKey || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
       return {
         ok: false,
-        message: "OPENAI_API_KEY is not configured in .env environment.",
+        message: "OPENAI_API_KEY is not configured in Settings or .env environment.",
       };
     }
     return { ok: true };
   }
 
   if (provider === "google") {
-    if (
-      !process.env.GOOGLE_GENERATIVE_AI_API_KEY &&
-      !process.env.GEMINI_API_KEY
-    ) {
+    const apiKey =
+      customApiKeys?.googleApiKey ||
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+      process.env.GEMINI_API_KEY;
+    if (!apiKey) {
       return {
         ok: false,
-        message:
-          "GOOGLE_GENERATIVE_AI_API_KEY is not configured in .env environment.",
+        message: "GOOGLE_GENERATIVE_AI_API_KEY is not configured in Settings or .env environment.",
+      };
+    }
+    return { ok: true };
+  }
+
+  if (provider === "groq") {
+    const apiKey = customApiKeys?.groqApiKey || process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      return {
+        ok: false,
+        message: "GROQ_API_KEY is not configured in Settings or .env environment.",
       };
     }
     return { ok: true };
   }
 
   if (provider === "ollama") {
-    const rawBaseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+    const rawBaseUrl = customApiKeys?.ollamaBaseUrl || process.env.OLLAMA_BASE_URL || "http://localhost:11434";
     const healthUrl = rawBaseUrl.endsWith("/api")
       ? `${rawBaseUrl.replace(/\/api$/, "")}/api/tags`
       : `${rawBaseUrl.replace(/\/$/, "")}/api/tags`;
@@ -126,7 +168,6 @@ export async function checkProviderHealth(
       }
 
       const targetModel = requestedModelName || process.env.OLLAMA_MODEL || "llama3.2";
-      // Find matching installed model or exact prefix match
       const matched = installedModels.find(
         (m) =>
           m === targetModel ||
@@ -138,7 +179,6 @@ export async function checkProviderHealth(
         return { ok: true, availableModel: matched };
       }
 
-      // If requested model isn't installed, auto-select first available installed model
       const fallbackInstalled = installedModels[0];
       return {
         ok: true,
@@ -155,3 +195,4 @@ export async function checkProviderHealth(
 
   return { ok: false, message: "Unsupported provider requested." };
 }
+
