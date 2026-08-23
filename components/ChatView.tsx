@@ -8,7 +8,6 @@ import {
   Download,
   Copy,
   ExternalLink,
-  RefreshCw,
   AlertTriangle,
   CheckCircle2,
   Calendar,
@@ -17,11 +16,14 @@ import {
   Wrench,
   Volume2,
   Loader2,
-  Zap,
   Menu,
+  FileText,
+  Clock,
+  Trash2,
 } from "lucide-react";
 import { ChatMessage, InputType } from "@/types/chat";
 import { SiteInspection } from "@/types/inspection";
+import { InspectionRecordItem } from "@/lib/sample-records";
 import { transcribeAudioBlobLocally } from "@/lib/browser-whisper";
 
 interface ChatViewProps {
@@ -31,6 +33,7 @@ interface ChatViewProps {
   onOpenModal: (inspection: SiteInspection) => void;
   showToast: (msg: string) => void;
   onOpenMobileSidebar?: () => void;
+  records?: InspectionRecordItem[];
 }
 
 export default function ChatView({
@@ -40,6 +43,7 @@ export default function ChatView({
   onOpenModal,
   showToast,
   onOpenMobileSidebar,
+  records = [],
 }: ChatViewProps) {
   const [inputText, setInputText] = useState<string>("");
   const [isRecordingVoice, setIsRecordingVoice] = useState<boolean>(false);
@@ -163,20 +167,20 @@ export default function ChatView({
         }
 
         setIsTranscribing(true);
-        setTranscriptionStatus("Processing recorded audio...");
+        setTranscriptionStatus("Processing audio note...");
         try {
           await new Promise((resolve) => setTimeout(resolve, 300));
           let transcript = speechRecognitionTextRef.current.trim();
 
           if (!transcript) {
-            setTranscriptionStatus("Initializing Local Whisper AI...");
+            setTranscriptionStatus("Transcribing audio...");
             try {
               transcript = await transcribeAudioBlobLocally(audioBlob, (prog) => {
                 setTranscriptionStatus(prog.message || "Transcribing audio locally...");
               });
             } catch (localErr: any) {
               console.warn("Local whisper transcription failed, falling back to server API:", localErr);
-              setTranscriptionStatus("Falling back to server transcription...");
+              setTranscriptionStatus("Transcribing via server...");
 
               const formData = new FormData();
               formData.append("file", audioBlob, "recording.webm");
@@ -198,7 +202,7 @@ export default function ChatView({
           if (transcript.trim()) {
             setInputText((prev) => (prev.trim() ? `${prev.trim()} ${transcript.trim()}` : transcript.trim()));
             setWasRecordedNote(true);
-            showToast("Audio transcribed! Review your text and click 'Extract Record' to send.");
+            showToast("Audio transcribed. Click 'Extract Record' to process.");
           } else {
             showToast("No speech detected in recorded audio.");
           }
@@ -213,10 +217,10 @@ export default function ChatView({
 
       mediaRecorder.start(200);
       setIsRecordingVoice(true);
-      showToast("Recording audio note... Speak clearly into your microphone.");
+      showToast("Recording voice note...");
     } catch (err: any) {
       console.error("Failed to access microphone:", err);
-      showToast("Microphone access denied. Please allow microphone access in browser settings.");
+      showToast("Microphone access denied. Please check browser permissions.");
     }
   };
 
@@ -287,7 +291,7 @@ export default function ChatView({
   };
 
   const formatDateHuman = (dateStr?: string): string => {
-    if (!dateStr) return "Date unavailable";
+    if (!dateStr) return "N/A";
     try {
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return dateStr;
@@ -301,345 +305,345 @@ export default function ChatView({
     }
   };
 
-  const getUrgencyBadge = (urgency: string, isFallback?: boolean) => {
-    const labelSuffix = isFallback ? " (Inferred)" : "";
+  const getUrgencyBadge = (urgency: string) => {
     switch (urgency?.toLowerCase()) {
       case "critical":
         return (
-          <span className="px-2.5 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-bold uppercase tracking-wider">
-            Critical{labelSuffix}
+          <span className="px-2 py-0.5 rounded bg-red-100 text-red-800 text-[11px] font-semibold">
+            Critical Urgency
           </span>
         );
       case "high":
         return (
-          <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wider">
-            High{labelSuffix}
+          <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[11px] font-semibold">
+            High Urgency
           </span>
         );
       case "medium":
         return (
-          <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-900 border border-blue-200 text-[10px] font-bold uppercase tracking-wider">
-            Medium{labelSuffix}
+          <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-900 text-[11px] font-semibold">
+            Medium Urgency
           </span>
         );
       case "low":
       default:
         return (
-          <span className="px-2.5 py-0.5 rounded-full bg-neutral-100 text-neutral-700 border border-neutral-200 text-[10px] font-medium uppercase tracking-wider">
-            Low{labelSuffix}
+          <span className="px-2 py-0.5 rounded bg-neutral-100 text-neutral-700 text-[11px] font-medium">
+            Low Urgency
           </span>
         );
     }
   };
 
-  const renderInputBox = (centered = false) => (
-    <div className={`space-y-3 ${centered ? "w-full max-w-2xl" : "max-w-4xl mx-auto"}`}>
-      {isRecordingVoice && (
-        <div className="p-3 rounded-xl bg-red-50 border border-red-200 flex items-center justify-between animate-pulse">
-          <div className="flex items-center gap-3">
-            <div className="w-3 h-3 rounded-full bg-red-600 animate-ping" />
-            <span className="text-xs font-bold text-red-900">
-              Recording Voice Note ({recordingSeconds}s)... Click 'Stop Recording' when finished.
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={stopRecording}
-            className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 shadow-sm flex items-center gap-1.5"
-          >
-            <Square className="w-3 h-3 fill-current" />
-            <span>Stop Recording</span>
-          </button>
-        </div>
-      )}
-
-      {isTranscribing && (
-        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center gap-3">
-          <Loader2 className="w-4 h-4 text-emerald-600 animate-spin shrink-0" />
-          <span className="text-xs font-bold text-emerald-900">
-            {transcriptionStatus || "Transcribing audio note..."}
-          </span>
-        </div>
-      )}
-
-      <div className="relative bg-white border border-neutral-300 shadow-sm rounded-2xl p-3 focus-within:ring-2 focus-within:ring-black focus-within:border-black transition-all">
-        <textarea
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          rows={centered ? 4 : 3}
-          disabled={isTranscribing}
-          placeholder="Type or paste site inspection details, or click 'Record Audio' to record a voice note..."
-          className="w-full bg-transparent p-1.5 text-sm sm:text-base font-mono leading-relaxed text-neutral-900 placeholder:text-neutral-400 outline-none resize-none disabled:opacity-50"
-        />
-
-        <div className="flex items-center justify-between pt-2 border-t border-neutral-100 px-1">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={toggleVoiceRecording}
-              disabled={isTranscribing}
-              className={`p-2 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                isRecordingVoice
-                  ? "bg-red-600 text-white animate-pulse"
-                  : isTranscribing
-                  ? "bg-neutral-100 border border-neutral-200 text-neutral-400 cursor-not-allowed"
-                  : "bg-neutral-100 border border-neutral-200 text-neutral-700 hover:bg-neutral-200"
-              }`}
-              title="Record an audio note, transcribe it locally, and review before sending"
-            >
-              {isRecordingVoice ? (
-                <Square className="w-3.5 h-3.5 fill-current" />
-              ) : isTranscribing ? (
-                <Loader2 className="w-4 h-4 text-emerald-500 animate-spin" />
-              ) : (
-                <Mic className="w-4 h-4 text-red-500" />
-              )}
-              <span className="hidden sm:inline">
-                {isRecordingVoice
-                  ? `Stop Recording (${recordingSeconds}s)`
-                  : isTranscribing
-                  ? "Transcribing..."
-                  : "Record Audio"}
-              </span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleSend}
-              disabled={loading || isTranscribing || !inputText.trim()}
-              className={`px-5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-                loading || isTranscribing || !inputText.trim()
-                  ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-                  : "bg-black text-white hover:bg-neutral-800 shadow-md active:scale-95"
-              }`}
-            >
-              <span>Extract Record</span>
-              <Send className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#fcfcfc] overflow-hidden">
+    <div className="flex-1 flex flex-col h-full bg-[#fcfcfc] overflow-y-auto font-sans">
+      {/* Mobile Top Nav */}
       {onOpenMobileSidebar && (
         <div className="md:hidden px-4 py-3 border-b border-neutral-200 bg-white flex items-center gap-3 shrink-0">
           <button
             onClick={onOpenMobileSidebar}
-            className="p-2 rounded-xl border border-neutral-200 text-neutral-700 hover:bg-neutral-100 transition-all"
-            aria-label="Open sidebar menu"
+            className="p-1.5 rounded-md border border-neutral-200 text-neutral-700 hover:bg-neutral-100"
+            aria-label="Open menu"
           >
             <Menu className="w-5 h-5" />
           </button>
-          <span className="text-sm font-bold text-neutral-900">Saniti AI</span>
+          <span className="text-sm font-semibold text-neutral-900">New inspection</span>
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 flex flex-col">
-        {messages.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center max-w-2xl mx-auto w-full py-8 space-y-8 animate-in fade-in duration-300 text-center">
-            <div className="space-y-3 px-4">
-              <blockquote className="text-lg sm:text-xl italic font-serif text-neutral-800 leading-relaxed">
-                “Transforming unstructured chaos into operational clarity.”
-              </blockquote>
+      <div className="max-w-4xl w-full mx-auto p-4 sm:p-8 space-y-6">
+        {/* Page Header */}
+        <div className="space-y-1">
+          <h1 className="text-xl sm:text-2xl font-semibold text-neutral-900 tracking-tight">
+            New inspection
+          </h1>
+          <p className="text-sm text-neutral-500">
+            Start with notes, an email, or a voice memo.
+          </p>
+        </div>
+
+        {/* Input Card */}
+        <div className="bg-white border border-neutral-300 rounded-xl p-4 shadow-2xs space-y-3">
+          {isRecordingVoice && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse" />
+                <span className="text-xs font-semibold text-red-900">
+                  Recording voice note ({recordingSeconds}s)...
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={stopRecording}
+                className="text-xs font-medium px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700 flex items-center gap-1"
+              >
+                <Square className="w-3 h-3 fill-current" />
+                <span>Stop</span>
+              </button>
+            </div>
+          )}
+
+          {isTranscribing && (
+            <div className="p-3 rounded-lg bg-neutral-100 border border-neutral-200 flex items-center gap-2.5">
+              <Loader2 className="w-4 h-4 text-neutral-700 animate-spin shrink-0" />
+              <span className="text-xs font-medium text-neutral-800">
+                {transcriptionStatus || "Processing voice note..."}
+              </span>
+            </div>
+          )}
+
+          <textarea
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            rows={5}
+            disabled={isTranscribing}
+            placeholder="Paste inspection notes..."
+            className="w-full bg-transparent text-sm text-neutral-900 placeholder:text-neutral-400 outline-none resize-none leading-relaxed"
+          />
+
+          <div className="flex items-center justify-between pt-3 border-t border-neutral-100">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleVoiceRecording}
+                disabled={isTranscribing}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${
+                  isRecordingVoice
+                    ? "bg-red-600 text-white"
+                    : isTranscribing
+                    ? "bg-neutral-100 text-neutral-400 cursor-not-allowed"
+                    : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                }`}
+              >
+                {isRecordingVoice ? (
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                ) : isTranscribing ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Mic className="w-3.5 h-3.5 text-neutral-600" />
+                )}
+                <span>
+                  {isRecordingVoice
+                    ? `Stop (${recordingSeconds}s)`
+                    : isTranscribing
+                    ? "Transcribing..."
+                    : "Record Voice Memo"}
+                </span>
+              </button>
+
+              {inputText.trim() && (
+                <button
+                  type="button"
+                  onClick={() => setInputText("")}
+                  className="px-2.5 py-1.5 rounded-lg text-xs text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100 flex items-center gap-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear</span>
+                </button>
+              )}
             </div>
 
-            {renderInputBox(true)}
-          </div>
-        ) : (
-          messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex flex-col ${
-                msg.sender === "user" ? "items-end" : "items-start"
-              } space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200`}
+            <button
+              onClick={handleSend}
+              disabled={loading || isTranscribing || !inputText.trim()}
+              className={`px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                loading || isTranscribing || !inputText.trim()
+                  ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                  : "bg-black text-white hover:bg-neutral-800"
+              }`}
             >
-              <div className="flex items-center gap-2 px-1">
-                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
-                  {msg.sender === "user" ? "Field Inspector / User" : "Saniti AI Assistant"}
-                </span>
-                <span className="text-[10px] font-mono text-neutral-400">{msg.timestamp}</span>
-              </div>
+              {loading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Extracting...</span>
+                </>
+              ) : (
+                <>
+                  <span>Extract Record</span>
+                  <Send className="w-3.5 h-3.5" />
+                </>
+              )}
+            </button>
+          </div>
+        </div>
 
-              {msg.sender === "user" ? (
-                <div className="max-w-2xl bg-neutral-900 text-white rounded-2xl rounded-tr-none px-5 py-3.5 text-xs leading-relaxed space-y-2 shadow-sm">
-                  {msg.inputType === "voice" && (
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-400 uppercase tracking-wider border-b border-neutral-800 pb-1">
-                      <Volume2 className="w-3.5 h-3.5 animate-pulse" />
-                      <span>Transcribed Voice Note</span>
+        {/* Extracted Messages / Processed Cards */}
+        {messages.length > 0 && (
+          <div className="space-y-4 pt-2">
+            <h2 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
+              Current Session Results
+            </h2>
+
+            <div className="space-y-4">
+              {messages.map((msg) => (
+                <div key={msg.id} className="space-y-3">
+                  {msg.sender === "user" ? (
+                    <div className="bg-neutral-100 border border-neutral-200 rounded-xl p-3.5 text-xs text-neutral-800 space-y-1">
+                      <div className="flex items-center gap-2 text-[11px] font-medium text-neutral-500">
+                        {msg.inputType === "voice" ? (
+                          <span className="flex items-center gap-1 text-amber-700">
+                            <Volume2 className="w-3 h-3" /> Voice Note Transcript
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            <FileText className="w-3 h-3" /> Raw Inspection Input
+                          </span>
+                        )}
+                        <span>•</span>
+                        <span>{msg.timestamp}</span>
+                      </div>
+                      <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                    </div>
+                  ) : (
+                    <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-4 shadow-2xs">
+                      {msg.parsedData ? (
+                        <>
+                          {/* Card Header */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-100">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-neutral-500">
+                                  Extracted Record
+                                </span>
+                                {getUrgencyBadge(msg.parsedData.urgencyLevel)}
+                              </div>
+                              <h3 className="text-base font-bold text-neutral-900 mt-1">
+                                {msg.parsedData.clientName || "Unspecified Client"}
+                              </h3>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => onOpenModal(msg.parsedData!)}
+                                className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg border border-neutral-200 text-neutral-800 hover:bg-neutral-50"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                <span>View Card</span>
+                              </button>
+                              <button
+                                onClick={() => handleDownloadJsonFile(msg.parsedData!)}
+                                className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-black text-white hover:bg-neutral-800"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>JSON</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Meta Fields */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-neutral-700">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-4 h-4 text-neutral-400 shrink-0" />
+                              <span className="truncate">
+                                {msg.parsedData.siteAddress || "Address not specified"}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 text-neutral-400 shrink-0" />
+                              <span>Date: {formatDateHuman(msg.parsedData.inspectionDate)}</span>
+                            </div>
+                            <div className="flex items-center gap-2 font-semibold text-neutral-900">
+                              <DollarSign className="w-4 h-4 text-neutral-400 shrink-0" />
+                              <span>
+                                Est. Budget:{" "}
+                                {msg.parsedData.budgetEstimate
+                                  ? `${msg.parsedData.currency} ${msg.parsedData.budgetEstimate.toLocaleString()}`
+                                  : "N/A"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Equipment Table / Items */}
+                          {msg.parsedData.equipmentNotes.length > 0 && (
+                            <div className="pt-3 border-t border-neutral-100 space-y-2">
+                              <span className="text-xs font-semibold text-neutral-600">
+                                Equipment & Infrastructure ({msg.parsedData.equipmentNotes.length})
+                              </span>
+                              <div className="flex flex-wrap gap-2">
+                                {msg.parsedData.equipmentNotes.map((item, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="text-xs px-2.5 py-1 rounded border border-neutral-200 bg-neutral-50 flex items-center gap-1.5 text-neutral-800"
+                                  >
+                                    <Wrench className="w-3 h-3 text-neutral-400" />
+                                    <span className="font-medium">{item.name}</span>
+                                    <span className="text-[11px] text-neutral-500 capitalize">
+                                      ({item.status})
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between pt-1">
+                            <button
+                              onClick={() => handleCopyJsonPayload(msg.parsedData!)}
+                              className="text-xs text-neutral-500 hover:text-black flex items-center gap-1 font-medium"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                              <span>Copy JSON Payload</span>
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-xs text-neutral-700">{msg.text}</p>
+                      )}
                     </div>
                   )}
-                  <p className="whitespace-pre-wrap font-mono">{msg.text}</p>
                 </div>
-              ) : (
-                <div className="max-w-3xl w-full bg-white border border-neutral-200 rounded-2xl rounded-tl-none p-5 space-y-4 shadow-md">
-                  <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
-                    <div className="flex items-center gap-2">
-                      <span className={`p-1 rounded-md ${msg.fallbackUsed ? "bg-amber-100 text-amber-800 border border-amber-200" : "bg-emerald-100 text-emerald-800 border border-emerald-200"}`}>
-                        {msg.fallbackUsed ? (
-                          <AlertTriangle className="w-4 h-4 text-amber-600" />
-                        ) : (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        )}
-                      </span>
-                      <span className="text-xs font-extrabold text-neutral-900">
-                        {msg.fallbackUsed ? "AI Extraction Failed (Fast Fallback Applied)" : "AI Extraction Completed"}
-                      </span>
-                    </div>
+              ))}
+            </div>
+          </div>
+        )}
 
-                    <div className="flex items-center gap-2">
-                      {msg.fallbackUsed ? (
-                        <span className="px-2.5 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-900 text-[10px] font-bold flex items-center gap-1" title={msg.warning || "Fallback engine used"}>
-                          <Zap className="w-3 h-3 text-amber-600" />
-                          Fast Rule-Based Fallback
-                        </span>
-                      ) : (
-                        <span className="px-2.5 py-0.5 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-700 text-[10px] font-mono">
-                          {msg.provider?.toUpperCase()} ({msg.modelName})
-                        </span>
-                      )}
+        {/* Recent Intake Logs / History Section */}
+        {records.length > 0 && messages.length === 0 && (
+          <div className="space-y-3 pt-4">
+            <h2 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" />
+              <span>Recent Inspection Records</span>
+            </h2>
+
+            <div className="space-y-2">
+              {records.slice(0, 4).map((rec) => (
+                <div
+                  key={rec.id}
+                  onClick={() => onOpenModal(rec.data)}
+                  className="p-3.5 bg-white border border-neutral-200 hover:border-neutral-400 rounded-xl transition-all cursor-pointer flex items-center justify-between text-xs"
+                >
+                  <div className="space-y-0.5">
+                    <div className="font-semibold text-neutral-900">
+                      {rec.data.clientName || "Unspecified Client"}
+                    </div>
+                    <div className="text-neutral-500 truncate max-w-lg">
+                      {rec.data.siteAddress || rec.sourceText}
                     </div>
                   </div>
 
-                  {msg.warning && msg.fallbackUsed && (
-                    <div className="px-3.5 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 shadow-2xs">
-                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <div className="space-y-0.5">
-                        <p className="font-bold text-amber-950">AI Model Timeout / Unreachable</p>
-                        <p className="text-[11px] text-amber-800 leading-snug">{msg.warning}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {msg.parsedData && (
-                    <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4 space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-200">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-wider">Client Record</span>
-                            {getUrgencyBadge(msg.parsedData.urgencyLevel, msg.fallbackUsed)}
-                          </div>
-                          <h3 className="text-base font-extrabold text-neutral-900 mt-0.5">
-                            {!msg.parsedData.clientName || msg.parsedData.clientName === "Client name not detected" || msg.parsedData.clientName === "Unknown Client" ? (
-                              <span className="text-amber-800/80 bg-amber-50 px-2 py-0.5 rounded text-xs font-medium italic border border-amber-200/60 inline-flex items-center gap-1">
-                                Client name not detected
-                              </span>
-                            ) : (
-                              msg.parsedData.clientName
-                            )}
-                          </h3>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => onOpenModal(msg.parsedData!)}
-                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-white border border-neutral-300 text-neutral-800 hover:bg-neutral-100 transition-colors shadow-2xs"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            <span>View Details</span>
-                          </button>
-                          <button
-                            onClick={() => handleDownloadJsonFile(msg.parsedData!)}
-                            className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-black text-white hover:bg-neutral-800 transition-colors shadow-2xs"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Download JSON</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                        <div className="flex items-center gap-2 text-neutral-700">
-                          <MapPin className="w-4 h-4 text-neutral-400 shrink-0" />
-                          <span className="truncate">
-                            {!msg.parsedData.siteAddress || msg.parsedData.siteAddress === "Address not detected" || msg.parsedData.siteAddress === "Address Not Provided" ? (
-                              <span className="text-neutral-400 italic">Address not detected</span>
-                            ) : (
-                              msg.parsedData.siteAddress
-                            )}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-neutral-700">
-                          <Calendar className="w-4 h-4 text-neutral-400 shrink-0" />
-                          <span>Date: {formatDateHuman(msg.parsedData.inspectionDate)}</span>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-neutral-700 font-semibold">
-                          <DollarSign className="w-4 h-4 text-neutral-400 shrink-0" />
-                          <span>
-                            Est. Budget: {msg.parsedData.budgetEstimate ? `${msg.parsedData.currency} ${msg.parsedData.budgetEstimate.toLocaleString()}` : <span className="text-neutral-400 font-normal italic">Not specified</span>}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="pt-2 border-t border-neutral-200/60 flex flex-wrap items-center gap-2">
-                        <span className="text-[11px] font-bold text-neutral-500 uppercase">Equipment Extracted:</span>
-                        {msg.parsedData.equipmentNotes.length === 0 ? (
-                          <span className="text-xs text-neutral-400 italic flex items-center gap-1">
-                            <Wrench className="w-3 h-3 text-neutral-300" />
-                            No equipment items detected
-                          </span>
-                        ) : (
-                          msg.parsedData.equipmentNotes.map((item, idx) => (
-                            <span
-                              key={idx}
-                              className={`text-[11px] font-medium px-2.5 py-1 rounded-md border flex items-center gap-1 ${
-                                item.status === "replace"
-                                  ? "bg-red-50 text-red-800 border-red-200 font-bold"
-                                  : item.status === "needs_repair"
-                                  ? "bg-amber-50 text-amber-900 border-amber-200 font-bold"
-                                  : "bg-white text-neutral-700 border-neutral-200"
-                              }`}
-                            >
-                              <Wrench className="w-3 h-3 text-neutral-500" />
-                              <span>{item.name}</span>
-                              <span className="opacity-60 font-mono">({item.status})</span>
-                            </span>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {msg.parsedData && (
-                    <div className="flex items-center justify-between pt-1 text-xs">
-                      <button
-                        onClick={() => handleCopyJsonPayload(msg.parsedData!)}
-                        className="text-neutral-500 hover:text-black font-semibold flex items-center gap-1.5"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Copy JSON Payload</span>
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-[11px] text-neutral-400">
+                      {rec.data.inspectionDate || "Recent"}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenModal(rec.data);
+                      }}
+                      className="text-xs font-medium text-neutral-700 hover:text-black border border-neutral-200 px-2.5 py-1 rounded bg-neutral-50"
+                    >
+                      View
+                    </button>
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
-          ))
-        )}
-
-        {loading && (
-          <div className="flex items-center gap-3 p-4 rounded-2xl bg-white border border-neutral-200 max-w-md shadow-sm animate-pulse">
-            <RefreshCw className="w-4 h-4 text-neutral-800 animate-spin" />
-            <span className="text-xs font-semibold text-neutral-700">
-              Extracting structured inspection fields...
-            </span>
           </div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
-
-      {messages.length > 0 && (
-        <div className="p-4 border-t border-neutral-200 bg-white shrink-0 shadow-lg">
-          {renderInputBox(false)}
-        </div>
-      )}
     </div>
   );
 }

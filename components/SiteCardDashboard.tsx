@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Sidebar from "@/components/Sidebar";
+import Sidebar, { TabType } from "@/components/Sidebar";
 import ChatView from "@/components/ChatView";
 import DashboardView from "@/components/DashboardView";
+import ClientsView from "@/components/ClientsView";
 import SiteInspectionModal from "@/components/SiteInspectionModal";
 import SettingsModal, { CustomApiKeys } from "@/components/SettingsModal";
 import { ProviderType } from "@/lib/llm-provider";
@@ -12,7 +13,7 @@ import { ChatMessage, InputType } from "@/types/chat";
 import { INITIAL_RECORDS, InspectionRecordItem } from "@/lib/sample-records";
 
 export default function SiteCardDashboard() {
-  const [activeTab, setActiveTab] = useState<"chat" | "dashboard">("chat");
+  const [activeTab, setActiveTab] = useState<TabType>("chat");
   const [provider, setProvider] = useState<ProviderType>("ollama");
   const [records, setRecords] = useState<InspectionRecordItem[]>(INITIAL_RECORDS);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -152,10 +153,10 @@ export default function SiteCardDashboard() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#0b0b0b] text-neutral-900 selection:bg-[#f36458] selection:text-black font-sans">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#121212] text-neutral-900 font-sans">
       {toastMessage && (
-        <div className="fixed top-5 right-5 z-70 bg-black text-white text-xs font-bold px-4 py-3 rounded-2xl shadow-2xl border border-neutral-800 flex items-center gap-2 animate-in slide-in-from-top-3 duration-200">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+        <div className="fixed top-5 right-5 z-70 bg-neutral-900 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-xl border border-neutral-800 flex items-center gap-2 animate-in slide-in-from-top-2 duration-200">
+          <span className="w-2 h-2 rounded-full bg-emerald-400" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -167,6 +168,7 @@ export default function SiteCardDashboard() {
         provider={provider}
         onProviderChange={setProvider}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onNewInspection={() => setActiveTab("chat")}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
@@ -179,6 +181,13 @@ export default function SiteCardDashboard() {
             loading={loading}
             onOpenModal={handleOpenModal}
             showToast={showToast}
+            onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+            records={records}
+          />
+        ) : activeTab === "clients" ? (
+          <ClientsView
+            records={records}
+            onOpenModal={handleOpenModal}
             onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
           />
         ) : (
