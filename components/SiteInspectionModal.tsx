@@ -3,23 +3,25 @@
 import React, { useState, useEffect } from "react";
 import {
   X,
-  Building,
-  Calendar,
-  DollarSign,
-  MapPin,
   AlertTriangle,
-  Wrench,
   CheckCircle2,
   Edit3,
   Check,
-  Copy,
   Download,
   Briefcase,
   Plus,
   Trash2,
-  FileText
+  Clock,
+  Wrench,
+  Send,
 } from "lucide-react";
-import { SiteInspection, EquipmentNote, UrgencyLevel } from "@/types/inspection";
+import {
+  SiteInspection,
+  EquipmentNote,
+  UrgencyLevel,
+  getInspectionRecordStatus,
+  getInspectionMissingFields,
+} from "@/types/inspection";
 
 interface SiteInspectionModalProps {
   isOpen: boolean;
@@ -59,10 +61,19 @@ export default function SiteInspectionModal({
 
   if (!isOpen) return null;
 
-  const handleCopyJson = () => {
-    navigator.clipboard.writeText(JSON.stringify(inspection, null, 2));
-    if (showToast) showToast("JSON payload copied to clipboard");
-  };
+  const { status, missingFields, missingCount } = getInspectionRecordStatus(inspection);
+
+  const isClientMissing =
+    !inspection.clientName ||
+    inspection.clientName === "Unknown Client" ||
+    inspection.clientName === "Client name not detected";
+
+  const isSiteMissing =
+    !inspection.siteAddress ||
+    inspection.siteAddress === "Address Not Provided" ||
+    inspection.siteAddress === "Address not detected";
+
+  const isBudgetMissing = inspection.budgetEstimate === null || inspection.budgetEstimate === undefined;
 
   const handleDownloadJson = () => {
     const filename = `site-inspection-${(inspection.clientName || "record")
@@ -85,9 +96,17 @@ export default function SiteInspectionModal({
   const handleToggleEdit = () => {
     if (isEditing && onSave) {
       onSave(inspection);
-      if (showToast) showToast("Updated inspection record saved");
+      if (showToast) showToast("Record saved successfully");
     }
     setIsEditing(!isEditing);
+  };
+
+  const handleDispatch = (item?: EquipmentNote) => {
+    const updated = { ...inspection, status: "dispatched" as const };
+    setInspection(updated);
+    if (onSave) onSave(updated);
+    if (onDispatchWorkOrder) onDispatchWorkOrder(item);
+    else if (showToast) showToast("Work Order dispatched");
   };
 
   const updateField = (key: keyof SiteInspection, value: any) => {
@@ -102,8 +121,8 @@ export default function SiteInspectionModal({
 
   const addEquipment = () => {
     const newItem: EquipmentNote = {
-      name: "New Equipment Unit",
-      status: "operational",
+      name: "New HVAC Unit",
+      status: "needs_repair",
       remarks: "Initial inspection check pending",
     };
     setInspection((prev) => ({
@@ -153,280 +172,233 @@ export default function SiteInspectionModal({
     setInspection((prev) => ({ ...prev, nextSteps: list }));
   };
 
-  const getEquipmentStatusBadge = (status: string) => {
-    switch (status) {
+  const renderStatusBadge = () => {
+    if (status === "dispatched") {
+      return (
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 text-blue-800 border border-blue-200 text-xs font-semibold">
+          <Send className="w-3.5 h-3.5 text-blue-600" />
+          <span>Dispatched</span>
+        </div>
+      );
+    }
+    if (status === "needs_review") {
+      return (
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-50 text-amber-900 border border-amber-200 text-xs font-semibold">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+          <span>Needs review</span>
+        </div>
+      );
+    }
+    return (
+      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold">
+        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+        <span>Ready for review</span>
+      </div>
+    );
+  };
+
+  const renderEquipmentBadge = (equipmentStatus: string) => {
+    switch (equipmentStatus) {
       case "replace":
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 border border-red-200 text-[11px] font-bold">
-            <AlertTriangle className="w-3 h-3 text-red-600" />
+          <span className="px-2 py-0.5 rounded bg-red-100 text-red-800 text-[11px] font-semibold">
             Replace
           </span>
         );
       case "needs_repair":
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-bold">
-            <Wrench className="w-3 h-3 text-amber-700" />
-            Needs Repair
+          <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[11px] font-semibold">
+            Needs repair
           </span>
         );
       case "operational":
+      default:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[11px] font-bold">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+          <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[11px] font-semibold">
             Operational
-          </span>
-        );
-      case "unknown":
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-neutral-100 text-neutral-700 border border-neutral-200 text-[11px] font-medium">
-            Unknown
-          </span>
-        );
-    }
-  };
-
-  const getUrgencyBadge = (urgency: string) => {
-    switch (urgency?.toLowerCase()) {
-      case "critical":
-        return (
-          <span className="px-3 py-1 rounded-full bg-red-600 text-white text-xs font-bold uppercase tracking-wider shadow-sm">
-            Critical Urgency
-          </span>
-        );
-      case "high":
-        return (
-          <span className="px-3 py-1 rounded-full bg-amber-500 text-white text-xs font-bold uppercase tracking-wider shadow-sm">
-            High Urgency
-          </span>
-        );
-      case "medium":
-        return (
-          <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-900 border border-blue-200 text-xs font-bold uppercase tracking-wider">
-            Medium Urgency
-          </span>
-        );
-      case "low":
-      default:
-        return (
-          <span className="px-3 py-1 rounded-full bg-neutral-100 text-neutral-700 border border-neutral-200 text-xs font-medium uppercase tracking-wider">
-            Low Urgency
           </span>
         );
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
-      <div className="bg-white border border-neutral-200 rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-        <div className="px-6 py-5 border-b border-neutral-200 flex items-center justify-between bg-neutral-50/80 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-black text-white">
-              <FileText className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono text-neutral-500 uppercase tracking-wider">Site Inspection Record Card</span>
-                {getUrgencyBadge(inspection.urgencyLevel)}
-              </div>
-              <h2 className="text-xl font-extrabold text-[#0b0b0b] tracking-tight mt-0.5">
-                {inspection.clientName || "Inspection Details"}
-              </h2>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleToggleEdit}
-              className={`flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-full border transition-all ${
-                isEditing
-                  ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                  : "bg-white text-neutral-800 border-neutral-300 hover:bg-neutral-100"
-              }`}
-            >
-              {isEditing ? (
-                <>
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Save Record</span>
-                </>
-              ) : (
-                <>
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Edit Record</span>
-                </>
-              )}
-            </button>
-
-            <button
-              onClick={onClose}
-              className="p-2 rounded-full text-neutral-400 hover:text-black hover:bg-neutral-200 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-150">
+      <div className="bg-white border border-neutral-300 rounded-2xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-xl overflow-hidden font-sans">
+        {/* Card Top Title Bar */}
+        <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between bg-neutral-50 shrink-0">
+          <span className="text-sm font-semibold text-neutral-800">Site inspection</span>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-md text-neutral-500 hover:text-black hover:bg-neutral-200 transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
-        <div className="p-6 space-y-6 overflow-y-auto flex-1">
-          <div className="bg-neutral-50 border border-neutral-200 rounded-2xl p-5 space-y-4">
-            <div className="text-xs font-bold text-neutral-900 uppercase tracking-wider flex items-center justify-between">
-              <span>Site & Operational Metadata</span>
-              {isEditing && <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">Edit Mode Active</span>}
-            </div>
+        {/* Card Body */}
+        <div className="p-6 space-y-6 overflow-y-auto flex-1 text-neutral-900">
+          {/* Header Block */}
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold tracking-tight text-neutral-900">
+              {isClientMissing ? (
+                <span className="text-neutral-400 font-normal">Client name not detected</span>
+              ) : (
+                inspection.clientName
+              )}
+            </h2>
+            <div>{renderStatusBadge()}</div>
+          </div>
 
-            {isEditing ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-600 mb-1">Client Name</label>
-                  <input
-                    type="text"
-                    value={inspection.clientName}
-                    onChange={(e) => updateField("clientName", e.target.value)}
-                    className="w-full bg-white border border-neutral-300 rounded-lg p-2.5 text-xs font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-black"
-                  />
-                </div>
+          <hr className="border-neutral-200" />
 
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-600 mb-1">Site Address</label>
-                  <input
-                    type="text"
-                    value={inspection.siteAddress}
-                    onChange={(e) => updateField("siteAddress", e.target.value)}
-                    className="w-full bg-white border border-neutral-300 rounded-lg p-2.5 text-xs font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-black"
-                  />
-                </div>
+          {/* Metadata Grid (Client, Site, Date, Budget) */}
+          {isEditing ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-neutral-50 p-4 rounded-xl border border-neutral-200">
+              <div>
+                <label className="block text-xs font-semibold text-neutral-600 mb-1">Client Name</label>
+                <input
+                  type="text"
+                  value={inspection.clientName}
+                  onChange={(e) => updateField("clientName", e.target.value)}
+                  placeholder="e.g. ABC Industries"
+                  className="w-full bg-white border border-neutral-300 rounded-md p-2 text-xs text-neutral-900 outline-none"
+                />
+              </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-600 mb-1">Inspection Date</label>
-                  <input
-                    type="text"
-                    value={inspection.inspectionDate}
-                    onChange={(e) => updateField("inspectionDate", e.target.value)}
-                    className="w-full bg-white border border-neutral-300 rounded-lg p-2.5 text-xs font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-black"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-semibold text-neutral-600 mb-1">Site Address</label>
+                <input
+                  type="text"
+                  value={inspection.siteAddress}
+                  onChange={(e) => updateField("siteAddress", e.target.value)}
+                  placeholder="e.g. 42 Main Street, Chennai"
+                  className="w-full bg-white border border-neutral-300 rounded-md p-2 text-xs text-neutral-900 outline-none"
+                />
+              </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-600 mb-1">Urgency Level</label>
-                  <select
-                    value={inspection.urgencyLevel}
-                    onChange={(e) => updateField("urgencyLevel", e.target.value as UrgencyLevel)}
-                    className="w-full bg-white border border-neutral-300 rounded-lg p-2.5 text-xs font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-black"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs font-semibold text-neutral-600 mb-1">Inspection Date</label>
+                <input
+                  type="text"
+                  value={inspection.inspectionDate}
+                  onChange={(e) => updateField("inspectionDate", e.target.value)}
+                  className="w-full bg-white border border-neutral-300 rounded-md p-2 text-xs text-neutral-900 outline-none"
+                />
+              </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-600 mb-1">Estimated Budget</label>
+              <div>
+                <label className="block text-xs font-semibold text-neutral-600 mb-1">Repair Budget</label>
+                <div className="flex gap-2">
                   <input
                     type="number"
                     value={inspection.budgetEstimate ?? ""}
                     onChange={(e) => updateField("budgetEstimate", e.target.value ? Number(e.target.value) : null)}
-                    className="w-full bg-white border border-neutral-300 rounded-lg p-2.5 text-xs font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-black"
+                    placeholder="e.g. 400000"
+                    className="w-full bg-white border border-neutral-300 rounded-md p-2 text-xs text-neutral-900 outline-none"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-600 mb-1">Currency</label>
                   <input
                     type="text"
                     value={inspection.currency}
                     onChange={(e) => updateField("currency", e.target.value)}
-                    className="w-full bg-white border border-neutral-300 rounded-lg p-2.5 text-xs font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-black"
+                    placeholder="INR"
+                    className="w-20 bg-white border border-neutral-300 rounded-md p-2 text-xs text-neutral-900 outline-none"
                   />
                 </div>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-1">
-                <div className="flex items-start gap-2.5">
-                  <Building className="w-4 h-4 text-neutral-400 mt-0.5 shrink-0" />
-                  <div>
-                    <span className="text-[10px] text-neutral-500 font-semibold block uppercase">Client</span>
-                    <span className="text-xs font-bold text-neutral-900">{inspection.clientName || "Not Specified"}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2.5">
-                  <MapPin className="w-4 h-4 text-neutral-400 mt-0.5 shrink-0" />
-                  <div>
-                    <span className="text-[10px] text-neutral-500 font-semibold block uppercase">Site Location</span>
-                    <span className="text-xs font-medium text-neutral-800 leading-snug">{inspection.siteAddress || "Not Provided"}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2.5">
-                  <Calendar className="w-4 h-4 text-neutral-400 mt-0.5 shrink-0" />
-                  <div>
-                    <span className="text-[10px] text-neutral-500 font-semibold block uppercase">Inspection Date</span>
-                    <span className="text-xs font-semibold text-neutral-800">{inspection.inspectionDate || "N/A"}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2.5">
-                  <DollarSign className="w-4 h-4 text-neutral-400 mt-0.5 shrink-0" />
-                  <div>
-                    <span className="text-[10px] text-neutral-500 font-semibold block uppercase">Repair Budget</span>
-                    <span className="text-xs font-bold text-neutral-900">
-                      {inspection.budgetEstimate ? `${inspection.currency} ${inspection.budgetEstimate.toLocaleString()}` : "N/A"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
-              <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider flex items-center gap-2">
-                <span>Equipment & Machinery Status</span>
-                <span className="px-2 py-0.5 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-700 text-[10px]">
-                  {inspection.equipmentNotes.length} items
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-y-5 gap-x-6">
+              <div>
+                <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block mb-1">
+                  CLIENT
                 </span>
-              </h3>
-              {isEditing && (
-                <button
-                  onClick={addEquipment}
-                  className="flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full bg-black text-white hover:bg-neutral-800"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Equipment</span>
-                </button>
-              )}
+                <span className={`text-sm ${isClientMissing ? "text-neutral-400 italic" : "font-medium text-neutral-900"}`}>
+                  {isClientMissing ? "Not detected" : inspection.clientName}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block mb-1">
+                  SITE
+                </span>
+                <span className={`text-sm ${isSiteMissing ? "text-neutral-400 italic" : "font-medium text-neutral-900"}`}>
+                  {isSiteMissing ? "Address not detected" : inspection.siteAddress}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block mb-1">
+                  INSPECTION DATE
+                </span>
+                <span className="text-sm font-medium text-neutral-900">
+                  {inspection.inspectionDate || "N/A"}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block mb-1">
+                  REPAIR BUDGET
+                </span>
+                <span className={`text-sm ${isBudgetMissing ? "text-neutral-400 italic" : "font-semibold text-neutral-900"}`}>
+                  {isBudgetMissing
+                    ? "Not detected"
+                    : `${inspection.currency || "INR"} ${inspection.budgetEstimate?.toLocaleString()}`}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Equipment Section */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
+                EQUIPMENT
+              </span>
+              <button
+                onClick={addEquipment}
+                className="text-xs font-semibold text-neutral-700 hover:text-black flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add equipment</span>
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 gap-3">
-              {inspection.equipmentNotes.length === 0 ? (
-                <div className="p-4 rounded-xl bg-neutral-50 text-center text-xs text-neutral-500 italic border border-neutral-200">
-                  No specific equipment notes recorded.
-                </div>
-              ) : (
-                inspection.equipmentNotes.map((item, idx) => (
-                  <div key={idx} className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-200 space-y-2">
+            {inspection.equipmentNotes.length === 0 ? (
+              <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-lg flex items-center justify-between">
+                <span className="text-xs text-neutral-500 italic">No equipment details detected</span>
+                <button
+                  onClick={addEquipment}
+                  className="text-xs font-medium text-neutral-800 hover:underline"
+                >
+                  + Add equipment
+                </button>
+              </div>
+            ) : (
+              <div className="border border-neutral-200 rounded-xl divide-y divide-neutral-200 overflow-hidden bg-neutral-50">
+                {inspection.equipmentNotes.map((item, idx) => (
+                  <div key={idx} className="p-3 flex items-start justify-between gap-3 text-xs bg-white">
                     {isEditing ? (
-                      <div className="space-y-2">
+                      <div className="w-full space-y-2">
                         <div className="flex items-center gap-2">
                           <input
                             type="text"
                             value={item.name}
                             onChange={(e) => updateEquipment(idx, { ...item, name: e.target.value })}
-                            className="font-bold text-xs bg-white border border-neutral-300 rounded-md px-2.5 py-1.5 flex-1 outline-none"
+                            className="font-semibold text-xs border border-neutral-300 rounded px-2 py-1 flex-1 outline-none"
                           />
                           <select
                             value={item.status}
                             onChange={(e) => updateEquipment(idx, { ...item, status: e.target.value as any })}
-                            className="text-xs font-semibold px-2.5 py-1.5 rounded-md border border-neutral-300 bg-white outline-none"
+                            className="text-xs font-medium px-2 py-1 rounded border border-neutral-300 outline-none"
                           >
                             <option value="operational">Operational</option>
-                            <option value="needs_repair">Needs Repair</option>
+                            <option value="needs_repair">Needs repair</option>
                             <option value="replace">Replace</option>
-                            <option value="unknown">Unknown</option>
                           </select>
                           <button
                             onClick={() => removeEquipment(idx)}
-                            className="w-7 h-7 rounded-full bg-white border border-neutral-300 flex items-center justify-center text-red-600 hover:bg-red-50"
+                            className="p-1 text-red-500 hover:text-red-700"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -435,203 +407,162 @@ export default function SiteInspectionModal({
                           type="text"
                           value={item.remarks}
                           onChange={(e) => updateEquipment(idx, { ...item, remarks: e.target.value })}
-                          className="w-full text-xs text-neutral-700 bg-white border border-neutral-300 rounded-md px-2.5 py-1.5 outline-none"
+                          className="w-full text-xs text-neutral-600 border border-neutral-200 rounded px-2 py-1 outline-none"
                         />
                       </div>
                     ) : (
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs text-neutral-900">{item.name}</span>
-                            {getEquipmentStatusBadge(item.status)}
-                          </div>
-                          <p className="text-xs text-neutral-600 leading-relaxed">{item.remarks}</p>
+                      <>
+                        <div className="space-y-0.5">
+                          <div className="font-semibold text-neutral-900">{item.name}</div>
+                          {item.remarks && (
+                            <div className="text-neutral-500 text-[11px] leading-relaxed">{item.remarks}</div>
+                          )}
                         </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {renderEquipmentBadge(item.status)}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-                        {(item.status === "replace" || item.status === "needs_repair") && (
-                          <button
-                            onClick={() => {
-                              setSelectedEquipmentForWorkOrder(item);
-                            }}
-                            className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-full bg-white border border-neutral-300 text-neutral-800 hover:bg-neutral-100 flex items-center gap-1.5 shadow-2xs"
-                          >
-                            <Wrench className="w-3 h-3 text-amber-600" />
-                            <span>Dispatch Work Order</span>
-                          </button>
-                        )}
+          {/* Key Findings Section */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
+                FINDINGS
+              </span>
+              {isEditing && (
+                <button onClick={addObservation} className="text-xs font-medium text-neutral-700 hover:underline">
+                  + Add Finding
+                </button>
+              )}
+            </div>
+
+            {inspection.keyObservations.length === 0 ? (
+              <p className="text-xs text-neutral-400 italic">No additional findings recorded</p>
+            ) : (
+              <ul className="space-y-1.5 text-xs text-neutral-800">
+                {inspection.keyObservations.map((obs, idx) => (
+                  <li key={idx} className="flex items-start gap-2">
+                    {isEditing ? (
+                      <div className="flex items-center gap-2 w-full">
+                        <input
+                          type="text"
+                          value={obs}
+                          onChange={(e) => updateObservation(idx, e.target.value)}
+                          className="w-full text-xs border border-neutral-300 rounded p-1.5 outline-none"
+                        />
+                        <button onClick={() => removeObservation(idx)} className="text-red-500">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-1.5 shrink-0" />
+                        <span className="leading-relaxed">{obs}</span>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Next Steps Section */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
+                NEXT STEPS
+              </span>
+              {isEditing && (
+                <button onClick={addNextStep} className="text-xs font-medium text-neutral-700 hover:underline">
+                  + Add Step
+                </button>
+              )}
+            </div>
+
+            {inspection.nextSteps.length === 0 ? (
+              <p className="text-xs text-neutral-400 italic">No next steps defined</p>
+            ) : (
+              <div className="space-y-1.5 text-xs text-neutral-800">
+                {inspection.nextSteps.map((step, idx) => (
+                  <div key={idx} className="flex items-start gap-2">
+                    {isEditing ? (
+                      <div className="flex items-center gap-2 w-full">
+                        <input
+                          type="text"
+                          value={step}
+                          onChange={(e) => updateNextStep(idx, e.target.value)}
+                          className="w-full text-xs border border-neutral-300 rounded p-1.5 outline-none"
+                        />
+                        <button onClick={() => removeNextStep(idx)} className="text-red-500">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-neutral-500">{idx + 1}.</span>
+                        <span className="leading-relaxed">{step}</span>
                       </div>
                     )}
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
-                <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider">Key Field Findings</h3>
-                {isEditing && (
-                  <button onClick={addObservation} className="text-xs font-semibold text-black hover:underline">
-                    + Add Finding
-                  </button>
-                )}
+                ))}
               </div>
-              <div className="space-y-2">
-                {inspection.keyObservations.length === 0 ? (
-                  <p className="text-xs text-neutral-400 italic py-2">No key findings logged.</p>
-                ) : (
-                  inspection.keyObservations.map((obs, idx) => (
-                    <div key={idx} className="flex items-start gap-2">
-                      {isEditing ? (
-                        <>
-                          <input
-                            type="text"
-                            value={obs}
-                            onChange={(e) => updateObservation(idx, e.target.value)}
-                            className="w-full text-xs bg-white border border-neutral-300 rounded-lg p-2 outline-none"
-                          />
-                          <button onClick={() => removeObservation(idx)} className="text-red-500 hover:text-red-700 p-1">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      ) : (
-                        <div className="flex items-start gap-2 text-xs text-neutral-700 leading-relaxed">
-                          <span className="w-1.5 h-1.5 rounded-full bg-black mt-1.5 shrink-0" />
-                          <span>{obs}</span>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
-                <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider">Action Plan & Next Steps</h3>
-                {isEditing && (
-                  <button onClick={addNextStep} className="text-xs font-semibold text-black hover:underline">
-                    + Add Action
-                  </button>
-                )}
-              </div>
-              <div className="space-y-2">
-                {inspection.nextSteps.length === 0 ? (
-                  <p className="text-xs text-neutral-400 italic py-2">No next steps defined.</p>
-                ) : (
-                  inspection.nextSteps.map((step, idx) => (
-                    <div key={idx} className="flex items-start gap-2">
-                      {isEditing ? (
-                        <>
-                          <input
-                            type="text"
-                            value={step}
-                            onChange={(e) => updateNextStep(idx, e.target.value)}
-                            className="w-full text-xs bg-white border border-neutral-300 rounded-lg p-2 outline-none"
-                          />
-                          <button onClick={() => removeNextStep(idx)} className="text-red-500 hover:text-red-700 p-1">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      ) : (
-                        <div className="flex items-start gap-2 text-xs text-neutral-800 font-medium leading-relaxed">
-                          <span className="w-4 h-4 rounded-full bg-black text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                            {idx + 1}
-                          </span>
-                          <span>{step}</span>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-neutral-200 bg-neutral-50 flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleCopyJson}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-full bg-white border border-neutral-300 text-neutral-800 hover:bg-neutral-100 transition-colors"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              <span>Copy JSON</span>
-            </button>
+        {/* Footer Bar */}
+        <div className="px-6 py-4 border-t border-neutral-200 bg-neutral-50 space-y-3 shrink-0">
+          {missingCount > 0 && status !== "dispatched" && (
+            <div className="flex items-center gap-2 text-xs font-medium text-amber-900 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                {missingCount} {missingCount === 1 ? "field needs" : "fields need"} review (
+                {missingFields.join(", ")})
+              </span>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleToggleEdit}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  isEditing
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                    : "bg-white border border-neutral-300 text-neutral-800 hover:bg-neutral-100"
+                }`}
+              >
+                {isEditing ? "Save record" : "Edit record"}
+              </button>
+
+              <button
+                onClick={handleDownloadJson}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white border border-neutral-300 text-neutral-800 hover:bg-neutral-100 transition-colors"
+              >
+                Download JSON
+              </button>
+            </div>
 
             <button
-              onClick={handleDownloadJson}
-              className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-full bg-black text-white hover:bg-neutral-800 transition-colors shadow-sm"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Download JSON File</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                if (onDispatchWorkOrder) onDispatchWorkOrder();
-                else if (showToast) showToast("Work Order dispatched for site findings");
-              }}
-              className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-full bg-amber-500 text-white hover:bg-amber-600 transition-colors shadow-sm"
+              onClick={() => handleDispatch()}
+              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                status === "dispatched"
+                  ? "bg-blue-100 text-blue-800 border border-blue-300 cursor-default"
+                  : "bg-black text-white hover:bg-neutral-800"
+              }`}
             >
               <Briefcase className="w-3.5 h-3.5" />
-              <span>Dispatch Work Order</span>
-            </button>
-
-            <button
-              onClick={onClose}
-              className="text-xs font-semibold px-4 py-2 rounded-full bg-neutral-200 text-neutral-800 hover:bg-neutral-300 transition-colors"
-            >
-              Close
+              <span>{status === "dispatched" ? "Dispatched" : "Work order"}</span>
             </button>
           </div>
         </div>
       </div>
-
-      {selectedEquipmentForWorkOrder && (
-        <div className="fixed inset-0 z-60 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white border border-neutral-200 rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
-              <h3 className="font-bold text-sm text-[#0b0b0b]">Dispatch Equipment Work Order</h3>
-              <button
-                onClick={() => setSelectedEquipmentForWorkOrder(null)}
-                className="text-xs text-neutral-400 hover:text-black font-semibold"
-              >
-                Cancel
-              </button>
-            </div>
-            <p className="text-xs text-neutral-600">
-              Confirm maintenance dispatch for equipment item:
-            </p>
-            <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 text-xs space-y-1">
-              <div className="font-bold text-neutral-900">{selectedEquipmentForWorkOrder.name}</div>
-              <div className="text-neutral-500">Status: {selectedEquipmentForWorkOrder.status}</div>
-              <div className="text-neutral-700">{selectedEquipmentForWorkOrder.remarks}</div>
-            </div>
-            <div className="pt-2 flex justify-end gap-2">
-              <button
-                onClick={() => setSelectedEquipmentForWorkOrder(null)}
-                className="px-4 py-2 text-xs font-semibold rounded-full bg-neutral-100 text-neutral-700"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  if (onDispatchWorkOrder) onDispatchWorkOrder(selectedEquipmentForWorkOrder);
-                  else if (showToast) showToast(`Work order dispatched for ${selectedEquipmentForWorkOrder.name}`);
-                  setSelectedEquipmentForWorkOrder(null);
-                }}
-                className="px-4 py-2 text-xs font-bold rounded-full bg-black text-white hover:bg-neutral-800"
-              >
-                Confirm Dispatch
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

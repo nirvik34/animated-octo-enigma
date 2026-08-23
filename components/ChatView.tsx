@@ -22,7 +22,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { ChatMessage, InputType } from "@/types/chat";
-import { SiteInspection } from "@/types/inspection";
+import { SiteInspection, getInspectionRecordStatus, getInspectionMissingFields } from "@/types/inspection";
 import { InspectionRecordItem } from "@/lib/sample-records";
 import { transcribeAudioBlobLocally } from "@/lib/browser-whisper";
 
@@ -502,14 +502,36 @@ export default function ChatView({
                           {/* Card Header */}
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-100">
                             <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-semibold text-neutral-500">
-                                  Extracted Record
-                                </span>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {(() => {
+                                  const { status: recordStatus, missingFields } = getInspectionRecordStatus(msg.parsedData);
+                                  if (recordStatus === "dispatched") {
+                                    return (
+                                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-[11px] font-semibold">
+                                        <CheckCircle2 className="w-3 h-3" />
+                                        Dispatched
+                                      </span>
+                                    );
+                                  }
+                                  if (recordStatus === "ready") {
+                                    return (
+                                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[11px] font-semibold">
+                                        <CheckCircle2 className="w-3 h-3" />
+                                        Ready
+                                      </span>
+                                    );
+                                  }
+                                  return (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[11px] font-semibold">
+                                      <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                      Needs review ({missingFields.length} missing)
+                                    </span>
+                                  );
+                                })()}
                                 {getUrgencyBadge(msg.parsedData.urgencyLevel)}
                               </div>
                               <h3 className="text-base font-bold text-neutral-900 mt-1">
-                                {msg.parsedData.clientName || "Unspecified Client"}
+                                {msg.parsedData.clientName || "Client name not detected"}
                               </h3>
                             </div>
 

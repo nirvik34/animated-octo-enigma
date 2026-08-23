@@ -22,7 +22,7 @@ import {
   Menu,
 } from "lucide-react";
 import { InspectionRecordItem } from "@/lib/sample-records";
-import { SiteInspection } from "@/types/inspection";
+import { SiteInspection, getInspectionRecordStatus, getInspectionMissingFields } from "@/types/inspection";
 
 interface DashboardViewProps {
   records: InspectionRecordItem[];
@@ -288,7 +288,32 @@ export default function DashboardView({
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-100">
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {(() => {
+                          const { status: recordStatus, missingFields } = getInspectionRecordStatus(data);
+                          if (recordStatus === "dispatched") {
+                            return (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] font-semibold">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Dispatched
+                              </span>
+                            );
+                          }
+                          if (recordStatus === "ready") {
+                            return (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-semibold">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Ready
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[10px] font-semibold">
+                              <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              Needs review ({missingFields.length} missing)
+                            </span>
+                          );
+                        })()}
                         {getSourceIcon(rec.sourceType)}
                         {getUrgencyBadge(data.urgencyLevel)}
                         <span className="text-[10px] font-mono text-neutral-400">ID: {rec.id}</span>

@@ -20,6 +20,9 @@ export type EquipmentNote = z.infer<typeof EquipmentNoteSchema>;
 export const UrgencyLevelSchema = z.enum(["low", "medium", "high", "critical"]);
 export type UrgencyLevel = z.infer<typeof UrgencyLevelSchema>;
 
+export const RecordStatusSchema = z.enum(["needs_review", "ready", "dispatched"]);
+export type RecordStatus = z.infer<typeof RecordStatusSchema>;
+
 export const SiteInspectionSchema = z.object({
   clientName: z
     .string()
@@ -36,12 +39,45 @@ export const SiteInspectionSchema = z.object({
   budgetEstimate: z.number().nullable().catch(null).default(null),
   currency: z.string().catch("USD").default("USD"),
   urgencyLevel: UrgencyLevelSchema.catch("medium").default("medium"),
+  status: RecordStatusSchema.optional().catch("needs_review"),
   equipmentNotes: z.array(EquipmentNoteSchema).catch([]).default([]),
   keyObservations: z.array(z.string()).catch([]).default([]),
   nextSteps: z.array(z.string()).catch([]).default([]),
 });
 
 export type SiteInspection = z.infer<typeof SiteInspectionSchema>;
+
+export function getInspectionMissingFields(inspection: SiteInspection): string[] {
+  const missing: string[] = [];
+  if (!inspection.clientName || inspection.clientName === "Unknown Client" || inspection.clientName === "Client name not detected") {
+    missing.push("Client Name");
+  }
+  if (!inspection.siteAddress || inspection.siteAddress === "Address Not Provided" || inspection.siteAddress === "Address not detected") {
+    missing.push("Site Location");
+  }
+  if (inspection.budgetEstimate === null || inspection.budgetEstimate === undefined) {
+    missing.push("Repair Budget");
+  }
+  if (!inspection.equipmentNotes || inspection.equipmentNotes.length === 0) {
+    missing.push("Equipment Details");
+  }
+  return missing;
+}
+
+export function getInspectionRecordStatus(inspection: SiteInspection): {
+  status: RecordStatus;
+  missingFields: string[];
+  missingCount: number;
+} {
+  if (inspection.status === "dispatched") {
+    return { status: "dispatched", missingFields: [], missingCount: 0 };
+  }
+  const missingFields = getInspectionMissingFields(inspection);
+  if (missingFields.length > 0) {
+    return { status: "needs_review", missingFields, missingCount: missingFields.length };
+  }
+  return { status: "ready", missingFields: [], missingCount: 0 };
+}
 
 export const EMPTY_SITE_INSPECTION: SiteInspection = {
   clientName: "",
@@ -50,6 +86,7 @@ export const EMPTY_SITE_INSPECTION: SiteInspection = {
   budgetEstimate: null,
   currency: "USD",
   urgencyLevel: "medium",
+  status: "needs_review",
   equipmentNotes: [],
   keyObservations: [],
   nextSteps: [],
@@ -62,6 +99,7 @@ export const DEFAULT_SITE_INSPECTION: SiteInspection = {
   budgetEstimate: 24500,
   currency: "USD",
   urgencyLevel: "high",
+  status: "ready",
   equipmentNotes: [
     {
       name: "Chiller Unit #3",
@@ -90,4 +128,5 @@ export const DEFAULT_SITE_INSPECTION: SiteInspection = {
     "Notify facility manager regarding South Bay drainage clearing",
   ],
 };
+
 
