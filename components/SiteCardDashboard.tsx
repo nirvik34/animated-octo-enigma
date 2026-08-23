@@ -39,7 +39,6 @@ export default function SiteCardDashboard() {
     }
   });
 
-  // Restore history & provider state from localStorage on mount
   useEffect(() => {
     try {
       const storedRecords = localStorage.getItem("saniti_inspection_records");
@@ -63,7 +62,6 @@ export default function SiteCardDashboard() {
     }
   }, []);
 
-  // Save records to localStorage whenever updated
   useEffect(() => {
     if (!isLoaded) return;
     try {
@@ -73,7 +71,6 @@ export default function SiteCardDashboard() {
     }
   }, [records, isLoaded]);
 
-  // Save chat messages to localStorage whenever updated
   useEffect(() => {
     if (!isLoaded) return;
     try {
@@ -83,7 +80,6 @@ export default function SiteCardDashboard() {
     }
   }, [chatMessages, isLoaded]);
 
-  // Save provider selection to localStorage whenever updated
   useEffect(() => {
     if (!isLoaded) return;
     try {

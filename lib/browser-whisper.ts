@@ -107,4 +107,3 @@ export async function transcribeAudioBlobLocally(
   return fullText;
 }
 
-

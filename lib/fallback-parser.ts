@@ -4,16 +4,13 @@ export function fastFallbackParse(rawText: string): SiteInspection {
   const text = rawText.trim();
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
 
-  // 1. Client Name Extraction
   let clientName = "Client name not detected";
   const clientMatch = text.match(/(?:Client|Customer|Company|For):\s*([^\n\r]+)/i);
   if (clientMatch && clientMatch[1]) {
     clientName = clientMatch[1].trim();
   } else {
-    // Check if paperwork is explicitly missing or unknown
     const isPaperworkMissing = text.toLowerCase().includes("paperwork was missing") || text.toLowerCase().includes("paperwork missing");
     
-    // Check for named contact person (e.g. "John said", "Contact: John")
     const contactMatch = text.match(/\b([A-Z][a-z]+)\s+(?:said|mentioned|called|reported|requested|notified)\b/);
     const ignoreNames = ["Had", "The", "Need", "Also", "Things", "Anyway", "Inspection", "This"];
 
@@ -24,7 +21,6 @@ export function fastFallbackParse(rawText: string): SiteInspection {
     } else if (isPaperworkMissing) {
       clientName = "Unknown Client (Paperwork Missing)";
     } else {
-      // Check for email address or company suffix
       const emailMatch = text.match(/([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
       if (emailMatch) {
         const domainName = emailMatch[2].split(".")[0];
@@ -39,7 +35,6 @@ export function fastFallbackParse(rawText: string): SiteInspection {
     }
   }
 
-  // 2. Site Address / Location Extraction
   let siteAddress = "Address not detected";
   const addressMatch = text.match(/(?:Site Location|Site|Address|Location):\s*([^\n\r]+)/i);
   if (addressMatch && addressMatch[1]) {
@@ -56,7 +51,6 @@ export function fastFallbackParse(rawText: string): SiteInspection {
     }
   }
 
-  // 3. Inspection Date Extraction
   let inspectionDate = new Date().toISOString().split("T")[0];
   const dateMatch = text.match(/(?:Date|Inspection Date|Audit Date):\s*([^\n\r]+)/i);
   if (dateMatch && dateMatch[1]) {
@@ -79,7 +73,6 @@ export function fastFallbackParse(rawText: string): SiteInspection {
     }
   }
 
-  // 4. Budget Estimate & Currency Extraction
   let budgetEstimate: number | null = null;
   let currency = "INR";
 
@@ -97,7 +90,6 @@ export function fastFallbackParse(rawText: string): SiteInspection {
     if (numericMatch && numericMatch[1]) {
       budgetEstimate = parseFloat(numericMatch[1].replace(/,/g, ""));
     } else {
-      // General decimal price pattern like 42.99
       const priceMatch = text.match(/\b(\d{1,6}\.\d{2})\b/);
       if (priceMatch && priceMatch[1]) {
         budgetEstimate = parseFloat(priceMatch[1]);
@@ -105,7 +97,6 @@ export function fastFallbackParse(rawText: string): SiteInspection {
     }
   }
 
-  // 5. Urgency Level Extraction
   let urgencyLevel: UrgencyLevel = "medium";
   const upperText = text.toUpperCase();
   if (upperText.includes("CRITICAL") || upperText.includes("SHUTDOWN") || upperText.includes("EVACUATE") || upperText.includes("HAZARD")) {
@@ -116,7 +107,6 @@ export function fastFallbackParse(rawText: string): SiteInspection {
     urgencyLevel = "low";
   }
 
-  // 6. Equipment Notes & Item Detection
   const equipmentNotes: EquipmentNote[] = [];
   const bulletLines = lines.filter((l) => l.startsWith("*") || l.startsWith("-") || l.startsWith("•"));
 
@@ -146,17 +136,14 @@ export function fastFallbackParse(rawText: string): SiteInspection {
     });
   }
 
-  // 7. Key Observations & Next Steps
   const keyObservations: string[] = [];
   const nextSteps: string[] = [];
 
-  // Extract TODO items or action phrases
   const todoMatches = text.match(/TODO[^\.,;\n\r]+/gi);
   if (todoMatches) {
     todoMatches.forEach((td) => nextSteps.push(td.trim()));
   }
 
-  // Search lines for action verbs if nextSteps is empty
   const actionLines = lines.filter((l) =>
     l.match(/\b(?:fix|check|ask|remember|buy|schedule|issue|notify|repair|replace|dispatch|investigate)\b/i)
   );
@@ -166,7 +153,6 @@ export function fastFallbackParse(rawText: string): SiteInspection {
     }
   });
 
-  // Collect key observation lines (e.g. sentences describing problems or state)
   const observationSentences = lines.filter((l) =>
     l.match(/\b(?:disappeared|worked|happened|wondering|typing|issue|problem|test|pasted|notes|discussion)\b/i)
   );

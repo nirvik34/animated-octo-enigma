@@ -37,7 +37,6 @@ export default function ClientsView({
   const [selectedClientName, setSelectedClientName] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Group records by client name
   const clientMap = new Map<string, ClientSummary>();
 
   records.forEach((rec) => {
@@ -73,7 +72,6 @@ export default function ClientsView({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#fcfcfc] overflow-hidden">
-      {/* Header */}
       <div className="px-6 py-5 border-b border-neutral-200 bg-white flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           {onOpenMobileSidebar && (
@@ -97,11 +95,8 @@ export default function ClientsView({
         </span>
       </div>
 
-      {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left List Pane */}
         <div className="w-full md:w-80 border-r border-neutral-200 bg-white flex flex-col shrink-0">
-          {/* Search */}
           <div className="p-3 border-b border-neutral-200">
             <div className="relative">
               <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-2.5" />
@@ -115,7 +110,6 @@ export default function ClientsView({
             </div>
           </div>
 
-          {/* Client List */}
           <div className="flex-1 overflow-y-auto divide-y divide-neutral-100">
             {clientsList.length === 0 ? (
               <div className="p-6 text-center text-xs text-neutral-500">
@@ -152,11 +146,9 @@ export default function ClientsView({
           </div>
         </div>
 
-        {/* Right Detail Pane */}
         <div className="hidden md:flex flex-1 flex-col overflow-y-auto p-6 bg-[#fcfcfc]">
           {activeClient ? (
             <div className="space-y-6 max-w-4xl">
-              {/* Client Detail Header */}
               <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -196,7 +188,6 @@ export default function ClientsView({
                 </div>
               </div>
 
-              {/* Client Inspections List */}
               <div className="space-y-3">
                 <h3 className="text-xs font-bold text-neutral-700 uppercase tracking-wider">
                   Inspection History ({activeClient.inspections.length})

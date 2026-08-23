@@ -224,7 +224,6 @@ export default function SiteInspectionModal({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-150">
       <div className="bg-white border border-neutral-300 rounded-2xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-xl overflow-hidden font-sans">
-        {/* Card Top Title Bar */}
         <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between bg-neutral-50 shrink-0">
           <span className="text-sm font-semibold text-neutral-800">Site inspection</span>
           <button
@@ -236,9 +235,7 @@ export default function SiteInspectionModal({
           </button>
         </div>
 
-        {/* Card Body */}
         <div className="p-6 space-y-6 overflow-y-auto flex-1 text-neutral-900">
-          {/* Header Block */}
           <div className="space-y-2">
             <h2 className="text-xl font-bold tracking-tight text-neutral-900">
               {isClientMissing ? (
@@ -252,7 +249,6 @@ export default function SiteInspectionModal({
 
           <hr className="border-neutral-200" />
 
-          {/* Metadata Grid (Client, Site, Date, Budget) */}
           {isEditing ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-neutral-50 p-4 rounded-xl border border-neutral-200">
               <div>
@@ -349,7 +345,6 @@ export default function SiteInspectionModal({
             </div>
           )}
 
-          {/* Equipment Section */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
@@ -429,7 +424,6 @@ export default function SiteInspectionModal({
             )}
           </div>
 
-          {/* Key Findings Section */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
@@ -472,7 +466,6 @@ export default function SiteInspectionModal({
             )}
           </div>
 
-          {/* Next Steps Section */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
@@ -516,7 +509,6 @@ export default function SiteInspectionModal({
           </div>
         </div>
 
-        {/* Footer Bar */}
         <div className="px-6 py-4 border-t border-neutral-200 bg-neutral-50 space-y-3 shrink-0">
           {missingCount > 0 && status !== "dispatched" && (
             <div className="flex items-center gap-2 text-xs font-medium text-amber-900 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">

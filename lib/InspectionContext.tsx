@@ -22,19 +22,16 @@ interface InspectionContextType {
   setProvider: (p: ProviderType) => void;
   handleSaveKeys: (keys: CustomApiKeys) => void;
   
-  // Modal state
   isModalOpen: boolean;
   modalInspection: SiteInspection;
   activeModalRecordId: string | null;
   openModal: (inspection: SiteInspection, recordId?: string) => void;
   closeModal: () => void;
   
-  // Settings modal
   isSettingsOpen: boolean;
   openSettings: () => void;
   closeSettings: () => void;
   
-  // Mobile sidebar
   isMobileSidebarOpen: boolean;
   openMobileSidebar: () => void;
   closeMobileSidebar: () => void;
@@ -68,7 +65,6 @@ export function InspectionProvider({ children }: { children: ReactNode }) {
     }
   });
 
-  // Restore history & provider state from localStorage on mount
   useEffect(() => {
     try {
       const storedRecords = localStorage.getItem("saniti_inspection_records");
@@ -92,7 +88,6 @@ export function InspectionProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Save records to localStorage whenever updated
   useEffect(() => {
     if (!isLoaded) return;
     try {
@@ -102,7 +97,6 @@ export function InspectionProvider({ children }: { children: ReactNode }) {
     }
   }, [records, isLoaded]);
 
-  // Save chat messages to localStorage whenever updated
   useEffect(() => {
     if (!isLoaded) return;
     try {
@@ -112,7 +106,6 @@ export function InspectionProvider({ children }: { children: ReactNode }) {
     }
   }, [chatMessages, isLoaded]);
 
-  // Save provider selection to localStorage whenever updated
   useEffect(() => {
     if (!isLoaded) return;
     try {

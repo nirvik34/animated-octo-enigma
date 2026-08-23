@@ -37,7 +37,6 @@ export default function Sidebar({
 
   const content = (
     <div className="flex flex-col h-full w-full bg-[#121212] text-neutral-200 border-r border-neutral-800 font-sans select-none">
-      {/* App Header */}
       <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-3 group">
           <div className="w-8 h-8 rounded-md bg-neutral-800 border border-neutral-700 flex items-center justify-center font-bold text-white text-sm tracking-wider group-hover:border-neutral-500 transition-colors">
@@ -53,7 +52,6 @@ export default function Sidebar({
           </div>
         </Link>
 
-        {/* Mobile close button */}
         {onCloseMobile && (
           <button
             onClick={onCloseMobile}
@@ -65,9 +63,7 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Main Navigation */}
       <div className="p-3 space-y-4 flex-1 overflow-y-auto">
-        {/* + New Button */}
         <Link
           href="/"
           onClick={onCloseMobile}
@@ -77,7 +73,6 @@ export default function Sidebar({
           <span>New Inspection</span>
         </Link>
 
-        {/* Navigation Section */}
         <div className="space-y-1.5">
           <div className="px-2.5 py-1 text-xs font-bold text-neutral-400 uppercase tracking-wider">
             Workspace
@@ -133,7 +128,6 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Provider Selector & Settings */}
       <div className="p-3 border-t border-neutral-800 bg-[#0d0d0d] space-y-3">
         {onProviderChange && (
           <div className="space-y-1">
@@ -170,12 +164,10 @@ export default function Sidebar({
 
   return (
     <>
-      {/* Desktop Sidebar (Persistent) */}
       <aside className="hidden md:flex w-56 shrink-0 h-full">
         {content}
       </aside>
 
-      {/* Mobile Drawer Sidebar */}
       {isOpenMobile && (
         <div className="fixed inset-0 z-60 md:hidden flex">
           <div
