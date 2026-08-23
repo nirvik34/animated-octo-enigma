@@ -157,11 +157,11 @@ export default function Sidebar({
               onChange={(e) => onProviderChange(e.target.value as ProviderType)}
               className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-neutral-600 cursor-pointer font-medium"
             >
-              <option value="auto">⚡ Auto (Fastest Cascade)</option>
-              <option value="groq">🚀 Groq LPU (Ultra Fast)</option>
-              <option value="google">✦ Google Gemini (Flash)</option>
-              <option value="openai">🤖 OpenAI GPT-4o-mini</option>
-              <option value="ollama">🦙 Ollama Local</option>
+              <option value="auto">Auto (Fastest Cascade)</option>
+              <option value="groq">Groq LPU (Ultra Fast)</option>
+              <option value="google">Google Gemini (Flash)</option>
+              <option value="openai">OpenAI GPT-4o-mini</option>
+              <option value="ollama">Ollama Local</option>
             </select>
           </div>
         )}
