@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Plus,
   FileText,
@@ -10,37 +12,35 @@ import {
 } from "lucide-react";
 import { ProviderType } from "@/lib/llm-provider";
 
-export type TabType = "chat" | "dashboard" | "clients";
-
 interface SidebarProps {
-  activeTab: TabType;
-  onTabChange: (tab: TabType) => void;
   recordCount: number;
   provider?: ProviderType;
   onProviderChange?: (p: ProviderType) => void;
   onOpenSettings: () => void;
-  onNewInspection?: () => void;
   isOpenMobile?: boolean;
   onCloseMobile?: () => void;
 }
 
 export default function Sidebar({
-  activeTab,
-  onTabChange,
   recordCount,
   provider,
   onProviderChange,
   onOpenSettings,
-  onNewInspection,
   isOpenMobile = false,
   onCloseMobile,
 }: SidebarProps) {
+  const pathname = usePathname();
+
+  const isChatActive = pathname === "/" || pathname === "/chat";
+  const isDashboardActive = pathname.startsWith("/inspections");
+  const isClientsActive = pathname.startsWith("/clients");
+
   const content = (
     <div className="flex flex-col h-full w-full bg-[#121212] text-neutral-200 border-r border-neutral-800 font-sans select-none">
       {/* App Header */}
       <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-md bg-neutral-800 border border-neutral-700 flex items-center justify-center font-bold text-white text-sm tracking-wider">
+        <Link href="/" className="flex items-center gap-3 group">
+          <div className="w-8 h-8 rounded-md bg-neutral-800 border border-neutral-700 flex items-center justify-center font-bold text-white text-sm tracking-wider group-hover:border-neutral-500 transition-colors">
             S
           </div>
           <div>
@@ -51,7 +51,7 @@ export default function Sidebar({
               Site Inspection Tool
             </span>
           </div>
-        </div>
+        </Link>
 
         {/* Mobile close button */}
         {onCloseMobile && (
@@ -68,20 +68,14 @@ export default function Sidebar({
       {/* Main Navigation */}
       <div className="p-3 space-y-4 flex-1 overflow-y-auto">
         {/* + New Button */}
-        <button
-          onClick={() => {
-            if (onNewInspection) {
-              onNewInspection();
-            } else {
-              onTabChange("chat");
-            }
-            onCloseMobile?.();
-          }}
+        <Link
+          href="/"
+          onClick={onCloseMobile}
           className="w-full flex items-center justify-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-bold bg-white text-black hover:bg-neutral-200 transition-colors shadow-xs"
         >
           <Plus className="w-4 h-4" />
           <span>New Inspection</span>
-        </button>
+        </Link>
 
         {/* Navigation Section */}
         <div className="space-y-1.5">
@@ -89,13 +83,11 @@ export default function Sidebar({
             Workspace
           </div>
 
-          <button
-            onClick={() => {
-              onTabChange("chat");
-              onCloseMobile?.();
-            }}
+          <Link
+            href="/"
+            onClick={onCloseMobile}
             className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === "chat"
+              isChatActive
                 ? "bg-neutral-800 text-white font-semibold"
                 : "text-neutral-300 hover:text-white hover:bg-neutral-800/50"
             }`}
@@ -104,15 +96,13 @@ export default function Sidebar({
               <Plus className="w-4 h-4 text-neutral-400" />
               <span>New Inspection</span>
             </div>
-          </button>
+          </Link>
 
-          <button
-            onClick={() => {
-              onTabChange("dashboard");
-              onCloseMobile?.();
-            }}
+          <Link
+            href="/inspections"
+            onClick={onCloseMobile}
             className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === "dashboard"
+              isDashboardActive
                 ? "bg-neutral-800 text-white font-semibold"
                 : "text-neutral-300 hover:text-white hover:bg-neutral-800/50"
             }`}
@@ -124,15 +114,13 @@ export default function Sidebar({
             <span className="text-xs px-2 py-0.5 rounded-md bg-neutral-800 text-neutral-300 font-mono font-semibold">
               {recordCount}
             </span>
-          </button>
+          </Link>
 
-          <button
-            onClick={() => {
-              onTabChange("clients");
-              onCloseMobile?.();
-            }}
+          <Link
+            href="/clients"
+            onClick={onCloseMobile}
             className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === "clients"
+              isClientsActive
                 ? "bg-neutral-800 text-white font-semibold"
                 : "text-neutral-300 hover:text-white hover:bg-neutral-800/50"
             }`}
@@ -141,7 +129,7 @@ export default function Sidebar({
               <Users className="w-4 h-4 text-neutral-400" />
               <span>Clients</span>
             </div>
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -202,4 +190,3 @@ export default function Sidebar({
     </>
   );
 }
-

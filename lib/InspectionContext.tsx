@@ -1,33 +1,62 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import Sidebar from "@/components/Sidebar";
-type TabType = "chat" | "dashboard" | "clients";
-import ChatView from "@/components/ChatView";
-import DashboardView from "@/components/DashboardView";
-import ClientsView from "@/components/ClientsView";
-import SiteInspectionModal from "@/components/SiteInspectionModal";
-import SettingsModal, { CustomApiKeys } from "@/components/SettingsModal";
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { ProviderType } from "@/lib/llm-provider";
 import { SiteInspection, EMPTY_SITE_INSPECTION } from "@/types/inspection";
 import { ChatMessage, InputType } from "@/types/chat";
 import { INITIAL_RECORDS, InspectionRecordItem } from "@/lib/sample-records";
+import { CustomApiKeys } from "@/components/SettingsModal";
 
-export default function SiteCardDashboard() {
-  const [activeTab, setActiveTab] = useState<TabType>("chat");
-  const [provider, setProvider] = useState<ProviderType>("auto");
+interface InspectionContextType {
+  records: InspectionRecordItem[];
+  chatMessages: ChatMessage[];
+  provider: ProviderType;
+  savedKeys: CustomApiKeys;
+  isLoaded: boolean;
+  loading: boolean;
+  toastMessage: string | null;
+  showToast: (msg: string) => void;
+  deleteRecord: (id: string) => void;
+  updateRecord: (updated: SiteInspection, recordId?: string) => void;
+  handleSendMessage: (text: string, inputType?: InputType) => Promise<void>;
+  setProvider: (p: ProviderType) => void;
+  handleSaveKeys: (keys: CustomApiKeys) => void;
+  
+  // Modal state
+  isModalOpen: boolean;
+  modalInspection: SiteInspection;
+  activeModalRecordId: string | null;
+  openModal: (inspection: SiteInspection, recordId?: string) => void;
+  closeModal: () => void;
+  
+  // Settings modal
+  isSettingsOpen: boolean;
+  openSettings: () => void;
+  closeSettings: () => void;
+  
+  // Mobile sidebar
+  isMobileSidebarOpen: boolean;
+  openMobileSidebar: () => void;
+  closeMobileSidebar: () => void;
+}
+
+const InspectionContext = createContext<InspectionContextType | undefined>(undefined);
+
+export function InspectionProvider({ children }: { children: ReactNode }) {
   const [records, setRecords] = useState<InspectionRecordItem[]>(INITIAL_RECORDS);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [provider, setProvider] = useState<ProviderType>("auto");
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
-
   const [loading, setLoading] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [modalInspection, setModalInspection] = useState<SiteInspection>(EMPTY_SITE_INSPECTION);
+  const [activeModalRecordId, setActiveModalRecordId] = useState<string | null>(null);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
+  
   const [savedKeys, setSavedKeys] = useState<CustomApiKeys>(() => {
     if (typeof window === "undefined") return {};
     try {
@@ -93,15 +122,6 @@ export default function SiteCardDashboard() {
     }
   }, [provider, isLoaded]);
 
-  const handleSaveKeys = (keys: CustomApiKeys) => {
-    setSavedKeys(keys);
-    try {
-      localStorage.setItem("saniti_api_keys", JSON.stringify(keys));
-    } catch (e) {
-      console.error("Failed to save API keys to localStorage:", e);
-    }
-  };
-
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -109,18 +129,52 @@ export default function SiteCardDashboard() {
     }, 3500);
   };
 
-  const handleOpenModal = (inspection: SiteInspection) => {
+  const handleSaveKeys = (keys: CustomApiKeys) => {
+    setSavedKeys(keys);
+    try {
+      localStorage.setItem("saniti_api_keys", JSON.stringify(keys));
+      showToast("API Keys saved");
+    } catch (e) {
+      console.error("Failed to save API keys to localStorage:", e);
+    }
+  };
+
+  const openModal = (inspection: SiteInspection, recordId?: string) => {
     setModalInspection(inspection);
+    let matchedId = recordId;
+    if (!matchedId) {
+      const found = records.find(
+        (r) =>
+          (r.data.clientName && r.data.clientName === inspection.clientName) ||
+          (r.data.siteAddress && r.data.siteAddress === inspection.siteAddress)
+      );
+      if (found) matchedId = found.id;
+    }
+    setActiveModalRecordId(matchedId || null);
     setIsModalOpen(true);
   };
 
-  const handleSaveModalInspection = (updated: SiteInspection) => {
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setActiveModalRecordId(null);
+  };
+
+  const deleteRecord = (id: string) => {
+    setRecords((prev) => prev.filter((r) => r.id !== id));
+    if (activeModalRecordId === id) {
+      closeModal();
+    }
+    showToast("Inspection record deleted.");
+  };
+
+  const updateRecord = (updated: SiteInspection, recordId?: string) => {
     setModalInspection(updated);
     setRecords((prev) =>
       prev.map((rec) => {
         if (
+          (recordId && rec.id === recordId) ||
           rec.data.clientName === updated.clientName ||
-          rec.data.siteAddress === updated.siteAddress
+          (rec.data.siteAddress && rec.data.siteAddress === updated.siteAddress)
         ) {
           return { ...rec, data: updated };
         }
@@ -209,66 +263,43 @@ export default function SiteCardDashboard() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#121212] text-neutral-900 font-sans">
-      {toastMessage && (
-        <div className="fixed top-5 right-5 z-70 bg-neutral-900 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-xl border border-neutral-800 flex items-center gap-2 animate-in slide-in-from-top-2 duration-200">
-          <span className="w-2 h-2 rounded-full bg-emerald-400" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
-      <Sidebar
-        recordCount={records.length}
-        provider={provider}
-        onProviderChange={setProvider}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        isOpenMobile={isMobileSidebarOpen}
-        onCloseMobile={() => setIsMobileSidebarOpen(false)}
-      />
-
-      <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#fcfcfc]">
-        {activeTab === "chat" ? (
-          <ChatView
-            messages={chatMessages}
-            onSendMessage={handleSendMessage}
-            loading={loading}
-            onOpenModal={handleOpenModal}
-            showToast={showToast}
-            onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
-            records={records}
-          />
-        ) : activeTab === "clients" ? (
-          <ClientsView
-            records={records}
-            onOpenModal={handleOpenModal}
-            onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
-          />
-        ) : (
-          <DashboardView
-            records={records}
-            onOpenModal={handleOpenModal}
-            showToast={showToast}
-            onNewInspection={() => setActiveTab("chat")}
-            onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
-          />
-        )}
-      </main>
-
-      <SiteInspectionModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        inspection={modalInspection}
-        onSave={handleSaveModalInspection}
-        showToast={showToast}
-      />
-
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        savedKeys={savedKeys}
-        onSaveKeys={handleSaveKeys}
-        showToast={showToast}
-      />
-    </div>
+    <InspectionContext.Provider
+      value={{
+        records,
+        chatMessages,
+        provider,
+        savedKeys,
+        isLoaded,
+        loading,
+        toastMessage,
+        showToast,
+        deleteRecord,
+        updateRecord,
+        handleSendMessage,
+        setProvider,
+        handleSaveKeys,
+        isModalOpen,
+        modalInspection,
+        activeModalRecordId,
+        openModal,
+        closeModal,
+        isSettingsOpen,
+        openSettings: () => setIsSettingsOpen(true),
+        closeSettings: () => setIsSettingsOpen(false),
+        isMobileSidebarOpen,
+        openMobileSidebar: () => setIsMobileSidebarOpen(true),
+        closeMobileSidebar: () => setIsMobileSidebarOpen(false),
+      }}
+    >
+      {children}
+    </InspectionContext.Provider>
   );
+}
+
+export function useInspectionContext() {
+  const context = useContext(InspectionContext);
+  if (!context) {
+    throw new Error("useInspectionContext must be used within an InspectionProvider");
+  }
+  return context;
 }

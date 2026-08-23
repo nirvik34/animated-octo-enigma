@@ -6,14 +6,16 @@ import {
   Building2,
   ChevronRight,
   Menu,
+  Trash2,
 } from "lucide-react";
 import { InspectionRecordItem } from "@/lib/sample-records";
 import { SiteInspection } from "@/types/inspection";
 
 interface ClientsViewProps {
   records: InspectionRecordItem[];
-  onOpenModal: (inspection: SiteInspection) => void;
+  onOpenModal: (inspection: SiteInspection, recordId?: string) => void;
   onOpenMobileSidebar?: () => void;
+  onDeleteRecord?: (id: string) => void;
 }
 
 interface ClientSummary {
@@ -29,9 +31,11 @@ export default function ClientsView({
   records,
   onOpenModal,
   onOpenMobileSidebar,
+  onDeleteRecord,
 }: ClientsViewProps) {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedClientName, setSelectedClientName] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Group records by client name
   const clientMap = new Map<string, ClientSummary>();
@@ -202,16 +206,16 @@ export default function ClientsView({
                   {activeClient.inspections.map((rec) => (
                     <div
                       key={rec.id}
-                      onClick={() => onOpenModal(rec.data)}
-                      className="bg-white border border-neutral-200 hover:border-neutral-400 p-4 rounded-xl cursor-pointer transition-all flex items-center justify-between"
+                      onClick={() => onOpenModal(rec.data, rec.id)}
+                      className="bg-white border border-neutral-200 hover:border-neutral-400 p-4 rounded-xl cursor-pointer transition-all flex items-center justify-between gap-4"
                     >
-                      <div className="space-y-1">
+                      <div className="space-y-1 flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-neutral-900">
+                          <span className="text-xs font-semibold text-neutral-900 truncate">
                             {rec.data.siteAddress || "Site Location"}
                           </span>
                           <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded capitalize ${
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded capitalize shrink-0 ${
                               rec.data.urgencyLevel === "critical" ||
                               rec.data.urgencyLevel === "high"
                                 ? "bg-red-100 text-red-800"
@@ -229,15 +233,54 @@ export default function ClientsView({
                         </div>
                       </div>
 
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenModal(rec.data);
-                        }}
-                        className="text-xs font-medium text-neutral-700 hover:text-black border border-neutral-200 px-3 py-1.5 rounded-lg bg-neutral-50 hover:bg-neutral-100"
-                      >
-                        View Card
-                      </button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenModal(rec.data, rec.id);
+                          }}
+                          className="text-xs font-medium text-neutral-700 hover:text-black border border-neutral-200 px-3 py-1.5 rounded-lg bg-neutral-50 hover:bg-neutral-100"
+                        >
+                          View Card
+                        </button>
+
+                        {onDeleteRecord && (
+                          deletingId === rec.id ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDeleteRecord(rec.id);
+                                  setDeletingId(null);
+                                }}
+                                className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-red-600 text-white hover:bg-red-700 transition-all shadow-2xs"
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeletingId(null);
+                                }}
+                                className="px-2 py-1.5 rounded-lg text-xs font-semibold text-neutral-600 hover:bg-neutral-200"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeletingId(rec.id);
+                              }}
+                              className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-800 border border-red-200 text-xs font-semibold flex items-center gap-1 transition-all"
+                              title="Delete Record"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

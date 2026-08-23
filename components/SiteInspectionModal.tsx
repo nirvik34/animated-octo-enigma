@@ -21,6 +21,7 @@ interface SiteInspectionModalProps {
   onClose: () => void;
   inspection: SiteInspection;
   onSave?: (updated: SiteInspection) => void;
+  onDelete?: () => void;
   onDispatchWorkOrder?: (item?: EquipmentNote) => void;
   showToast?: (msg: string) => void;
 }
@@ -30,6 +31,7 @@ export default function SiteInspectionModal({
   onClose,
   inspection: initialInspection,
   onSave,
+  onDelete,
   onDispatchWorkOrder,
   showToast,
 }: SiteInspectionModalProps) {
@@ -37,12 +39,14 @@ export default function SiteInspectionModal({
   const [prevIsOpen, setPrevIsOpen] = useState<boolean>(isOpen);
   const [inspection, setInspection] = useState<SiteInspection>(initialInspection);
   const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [showConfirmDelete, setShowConfirmDelete] = useState<boolean>(false);
 
   if (prevInitial !== initialInspection || prevIsOpen !== isOpen) {
     setPrevInitial(initialInspection);
     setPrevIsOpen(isOpen);
     setInspection(initialInspection);
     setIsEditing(false);
+    setShowConfirmDelete(false);
   }
 
   useEffect(() => {
@@ -543,6 +547,33 @@ export default function SiteInspectionModal({
               >
                 Download JSON
               </button>
+
+              {onDelete && (
+                showConfirmDelete ? (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={onDelete}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-600 text-white hover:bg-red-700 transition-colors"
+                    >
+                      Confirm Delete
+                    </button>
+                    <button
+                      onClick={() => setShowConfirmDelete(false)}
+                      className="px-2 py-1.5 rounded-lg text-xs font-medium text-neutral-600 hover:bg-neutral-200"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowConfirmDelete(true)}
+                    className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                )
+              )}
             </div>
 
             <button

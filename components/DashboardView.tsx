@@ -18,16 +18,18 @@ import {
   Plus,
   Copy,
   Menu,
+  Trash2,
 } from "lucide-react";
 import { InspectionRecordItem } from "@/lib/sample-records";
 import { SiteInspection, getInspectionRecordStatus } from "@/types/inspection";
 
 interface DashboardViewProps {
   records: InspectionRecordItem[];
-  onOpenModal: (inspection: SiteInspection) => void;
+  onOpenModal: (inspection: SiteInspection, recordId?: string) => void;
   showToast: (msg: string) => void;
   onNewInspection: () => void;
   onOpenMobileSidebar?: () => void;
+  onDeleteRecord?: (id: string) => void;
 }
 
 export default function DashboardView({
@@ -36,9 +38,11 @@ export default function DashboardView({
   showToast,
   onNewInspection,
   onOpenMobileSidebar,
+  onDeleteRecord,
 }: DashboardViewProps) {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [urgencyFilter, setUrgencyFilter] = useState<string>("all");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const filteredRecords = records.filter((rec) => {
     const data = rec.data;
@@ -281,7 +285,7 @@ export default function DashboardView({
               return (
                 <div
                   key={rec.id}
-                  onClick={() => onOpenModal(data)}
+                  onClick={() => onOpenModal(data, rec.id)}
                   className="p-5 bg-white border border-neutral-200 hover:border-black rounded-2xl transition-all shadow-2xs hover:shadow-md cursor-pointer space-y-4 group"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-100">
@@ -321,7 +325,7 @@ export default function DashboardView({
                       </h3>
                     </div>
 
-                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={(e) => handleCopyJson(rec, e)}
                         className="p-2 rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 hover:text-black text-xs font-semibold flex items-center gap-1"
@@ -340,12 +344,50 @@ export default function DashboardView({
                       </button>
 
                       <button
-                        onClick={() => onOpenModal(data)}
+                        onClick={() => onOpenModal(data, rec.id)}
                         className="px-3.5 py-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-900 text-xs font-bold flex items-center gap-1"
                       >
                         <span>Card</span>
                         <ExternalLink className="w-3.5 h-3.5" />
                       </button>
+
+                      {onDeleteRecord && (
+                        deletingId === rec.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteRecord(rec.id);
+                                setDeletingId(null);
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-red-600 text-white hover:bg-red-700 transition-all shadow-2xs"
+                            >
+                              Confirm Delete
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeletingId(null);
+                              }}
+                              className="px-2 py-1.5 rounded-lg text-xs font-semibold text-neutral-600 hover:bg-neutral-200"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingId(rec.id);
+                            }}
+                            className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-800 border border-red-200 text-xs font-semibold flex items-center gap-1 transition-all"
+                            title="Delete Record"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span className="hidden lg:inline">Delete</span>
+                          </button>
+                        )
+                      )}
                     </div>
                   </div>
 
