@@ -10,9 +10,9 @@ export const EquipmentStatusSchema = z.enum([
 export type EquipmentStatus = z.infer<typeof EquipmentStatusSchema>;
 
 export const EquipmentNoteSchema = z.object({
-  name: z.string().catch("Unspecified Equipment").default("Unspecified Equipment"),
-  status: EquipmentStatusSchema.catch("unknown").default("unknown"),
-  remarks: z.string().catch("No remarks").default("No remarks"),
+  name: z.string().describe("Equipment or machinery name"),
+  status: EquipmentStatusSchema,
+  remarks: z.string().describe("Concise observation or issue description"),
 });
 
 export type EquipmentNote = z.infer<typeof EquipmentNoteSchema>;
@@ -24,25 +24,16 @@ export const RecordStatusSchema = z.enum(["needs_review", "ready", "dispatched"]
 export type RecordStatus = z.infer<typeof RecordStatusSchema>;
 
 export const SiteInspectionSchema = z.object({
-  clientName: z
-    .string()
-    .catch("Unknown Client")
-    .default("Unknown Client"),
-  siteAddress: z
-    .string()
-    .catch("Address Not Provided")
-    .default("Address Not Provided"),
-  inspectionDate: z
-    .string()
-    .catch(() => new Date().toISOString().split("T")[0])
-    .default(() => new Date().toISOString().split("T")[0]),
-  budgetEstimate: z.number().nullable().catch(null).default(null),
-  currency: z.string().catch("INR").default("INR"),
-  urgencyLevel: UrgencyLevelSchema.catch("medium").default("medium"),
-  status: RecordStatusSchema.optional().catch("needs_review"),
-  equipmentNotes: z.array(EquipmentNoteSchema).catch([]).default([]),
-  keyObservations: z.array(z.string()).catch([]).default([]),
-  nextSteps: z.array(z.string()).catch([]).default([]),
+  clientName: z.string().describe("Client company or organization name"),
+  siteAddress: z.string().describe("Full site address or physical location"),
+  inspectionDate: z.string().describe("Inspection date in YYYY-MM-DD format"),
+  budgetEstimate: z.number().nullable().describe("Numerical budget estimate or repair cost, or null if none"),
+  currency: z.string().describe("Currency code such as USD, EUR, GBP, INR"),
+  urgencyLevel: UrgencyLevelSchema,
+  status: RecordStatusSchema,
+  equipmentNotes: z.array(EquipmentNoteSchema),
+  keyObservations: z.array(z.string()),
+  nextSteps: z.array(z.string()),
 });
 
 export type SiteInspection = z.infer<typeof SiteInspectionSchema>;

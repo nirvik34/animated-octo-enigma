@@ -14,7 +14,7 @@ import { INITIAL_RECORDS, InspectionRecordItem } from "@/lib/sample-records";
 
 export default function SiteCardDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>("chat");
-  const [provider, setProvider] = useState<ProviderType>("ollama");
+  const [provider, setProvider] = useState<ProviderType>("auto");
   const [records, setRecords] = useState<InspectionRecordItem[]>(INITIAL_RECORDS);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
@@ -119,6 +119,7 @@ export default function SiteCardDashboard() {
         modelName: json.modelName,
         fallbackUsed: json.fallbackUsed,
         warning: json.warning,
+        executionMs: json.executionMs,
       };
 
       setChatMessages((prev) => [...prev, assistantMessage]);

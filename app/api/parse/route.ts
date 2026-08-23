@@ -14,8 +14,8 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json().catch(() => ({}));
-    rawText = body.rawText || "";
-    const providerOverride = body.providerOverride as ProviderType | "fallback" | undefined;
+    rawText = body.rawText || body.text || body.rawInspectionText || "";
+    const providerOverride = (body.providerOverride || body.provider) as ProviderType | "fallback" | undefined;
     const forceFallback = body.forceFallback === true || providerOverride === "fallback";
     const apiKeys = body.apiKeys || {};
 
@@ -38,34 +38,12 @@ export async function POST(req: Request) {
       });
     }
 
-    const requestedProvider = (providerOverride || process.env.LLM_PROVIDER || "ollama").toLowerCase() as ProviderType;
+    const rawRequested = (providerOverride || process.env.LLM_PROVIDER || "auto").toLowerCase();
+    const isAuto = rawRequested === "auto" || rawRequested === "fastest";
 
-    const health = await checkProviderHealth(requestedProvider, undefined, apiKeys);
-    if (!health.ok) {
-      const fallbackData = fastFallbackParse(rawText);
-      const executionMs = Date.now() - startTime;
-      return NextResponse.json({
-        success: true,
-        data: fallbackData,
-        provider: `${requestedProvider} (Unavailable -> Fallback)`,
-        modelName: `Instant Heuristic Engine (${executionMs}ms)`,
-        fallbackUsed: true,
-        warning: `The AI provider '${requestedProvider}' is currently unreachable. A basic record was generated using keyword rules. Please review and edit the fields below.`,
-      });
-    }
-
-    let providerConfig;
-    try {
-      providerConfig = getLLMProviderConfig(requestedProvider, health.availableModel, apiKeys);
-    } catch (configErr) {
-      const err = configErr as Error;
-      return NextResponse.json(
-        { error: err.message || "Invalid provider configuration." },
-        { status: 400 }
-      );
-    }
-
-    const { provider, modelName, model } = providerConfig;
+    const providersToTry: ProviderType[] = isAuto
+      ? ["groq", "google", "openai", "ollama"]
+      : [rawRequested as ProviderType];
 
     const systemPrompt = `You are a world-class industrial site inspection analyst and structured data extractor.
 Your job is to read raw, messy, unformatted inspection logs (voice memo transcripts, emails, field notes, emergency reports) and convert them into a clean JSON structure adhering strictly to the schema provided.
@@ -80,52 +58,69 @@ Rules for Extraction:
 7. Key Observations: Extract distinct factual findings, safety issues, or physical conditions as an array of strings.
 8. Next Steps: Extract recommended follow-up actions, maintenance orders, or scheduling items as an array of clear actionable strings.`;
 
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("AI response timeout limit exceeded (8s)")), 8000)
-    );
+    let lastError: Error | null = null;
 
-    const parsePromise = generateObject({
-      model,
-      schema: SiteInspectionSchema,
-      system: systemPrompt,
-      prompt: rawText.trim(),
-    });
+    for (const targetProvider of providersToTry) {
+      try {
+        const health = await checkProviderHealth(targetProvider, undefined, apiKeys);
+        if (!health.ok) continue;
 
-    const result = (await Promise.race([parsePromise, timeoutPromise])) as { object: unknown };
+        const providerConfig = getLLMProviderConfig(targetProvider, health.availableModel, apiKeys);
+        const { provider, modelName, model } = providerConfig;
+
+        const timeoutMs = isAuto ? 15000 : targetProvider === "ollama" ? 40000 : 25000;
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`AI response timeout limit exceeded (${Math.round(timeoutMs / 1000)}s)`)),
+            timeoutMs
+          )
+        );
+
+        const parsePromise = generateObject({
+          model,
+          schema: SiteInspectionSchema,
+          system: systemPrompt,
+          prompt: rawText.trim(),
+        });
+
+        const result = (await Promise.race([parsePromise, timeoutPromise])) as { object: unknown };
+        const executionMs = Date.now() - startTime;
+
+        return NextResponse.json({
+          success: true,
+          data: result.object,
+          provider: isAuto ? `auto (${provider})` : provider,
+          modelName,
+          executionMs,
+          fallbackUsed: false,
+        });
+      } catch (err) {
+        lastError = err as Error;
+        console.warn(`Provider '${targetProvider}' attempt failed:`, lastError.message);
+      }
+    }
+
+    const fallbackData = fastFallbackParse(rawText);
+    const executionMs = Date.now() - startTime;
 
     return NextResponse.json({
       success: true,
-      data: result.object,
-      provider,
-      modelName,
-      fallbackUsed: false,
+      data: fallbackData,
+      provider: "fallback",
+      modelName: `Instant Heuristic Engine (${executionMs}ms)`,
+      executionMs,
+      fallbackUsed: true,
+      warning: lastError?.message
+        ? `AI Model Notice: ${lastError.message}. Basic record generated via keyword engine.`
+        : "AI Provider unreachable. Basic record generated via keyword engine.",
     });
   } catch (error) {
     const err = error as Error;
-    console.warn("LLM Extraction failed or timed out. Falling back to Instant Heuristic Engine:", err.message);
-
-    if (rawText && rawText.trim()) {
-      const fallbackData = fastFallbackParse(rawText);
-      const executionMs = Date.now() - startTime;
-
-      const isTimeout = err.message?.includes("timeout");
-      const userWarning = isTimeout
-        ? "AI response timed out (8s limit). A basic record was generated using keyword rules. Please review and edit the fields below."
-        : "AI model encountered an error during processing. A basic record was generated using keyword rules. Please review and edit the fields below.";
-
-      return NextResponse.json({
-        success: true,
-        data: fallbackData,
-        provider: "fallback",
-        modelName: `Instant Heuristic Engine (${executionMs}ms)`,
-        fallbackUsed: true,
-        warning: userWarning,
-      });
-    }
-
+    const executionMs = Date.now() - startTime;
     return NextResponse.json(
       {
         error: err.message || "An unexpected error occurred during extraction.",
+        executionMs,
       },
       { status: 500 }
     );

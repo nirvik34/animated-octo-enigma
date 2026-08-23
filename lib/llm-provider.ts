@@ -2,7 +2,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { LanguageModel } from "ai";
 
-export type ProviderType = "ollama" | "openai" | "google" | "groq";
+export type ProviderType = "auto" | "groq" | "google" | "openai" | "ollama";
 
 export interface CustomApiKeys {
   openaiApiKey?: string;
@@ -70,7 +70,7 @@ export function getLLMProviderConfig(
         "Groq API Key is missing. Add your API key in Settings or set GROQ_API_KEY in environment variables."
       );
     }
-    const modelName = modelOverrideName || process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+    const modelName = modelOverrideName || process.env.GROQ_MODEL || "openai/gpt-oss-20b";
     const groqOpenAI = createOpenAI({
       baseURL: "https://api.groq.com/openai/v1",
       apiKey,

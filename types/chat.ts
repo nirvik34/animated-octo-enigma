@@ -13,5 +13,6 @@ export interface ChatMessage {
   modelName?: string;
   fallbackUsed?: boolean;
   warning?: string;
+  executionMs?: number;
   isLoading?: boolean;
 }

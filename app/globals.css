@@ -39,6 +39,10 @@
   --brand-dot: #f36458;
 }
 
+html {
+  font-size: 18px;
+}
+
 body {
   background-color: #ffffff;
   color: #0b0b0b;
