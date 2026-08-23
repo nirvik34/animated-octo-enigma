@@ -71,41 +71,41 @@ export default function ClientsView({
     : clientsList[0] || null;
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#fcfcfc] overflow-hidden">
-      <div className="px-6 py-5 border-b border-neutral-200 bg-white flex items-center justify-between shrink-0">
+    <div className="flex-1 flex flex-col h-full bg-[#f8f9fa] overflow-hidden">
+      <div className="px-6 py-4 border-b border-neutral-200 bg-white flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           {onOpenMobileSidebar && (
             <button
               onClick={onOpenMobileSidebar}
-              className="md:hidden p-2 rounded-lg border border-neutral-200 text-neutral-700 hover:bg-neutral-100 transition-all shrink-0"
+              className="md:hidden p-1.5 rounded border border-neutral-200 text-neutral-700 hover:bg-neutral-100 transition-all shrink-0"
               aria-label="Open sidebar menu"
             >
               <Menu className="w-5 h-5" />
             </button>
           )}
           <div>
-            <h1 className="text-lg font-bold text-neutral-900 tracking-tight">Clients</h1>
+            <h1 className="text-base font-bold text-neutral-900">Clients</h1>
             <p className="text-xs text-neutral-500 mt-0.5">
-              Client accounts and site inspection logs
+              Client accounts and field site inspection logs
             </p>
           </div>
         </div>
-        <span className="text-xs font-semibold text-neutral-600 bg-neutral-100 px-3 py-1 rounded-full border border-neutral-200">
+        <span className="text-xs font-mono text-neutral-500">
           {clientsList.length} Active Accounts
         </span>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        <div className="w-full md:w-80 border-r border-neutral-200 bg-white flex flex-col shrink-0">
+        <div className="w-full md:w-72 border-r border-neutral-200 bg-white flex flex-col shrink-0">
           <div className="p-3 border-b border-neutral-200">
             <div className="relative">
-              <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-2.5" />
+              <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-2.5" />
               <input
                 type="text"
                 placeholder="Search clients..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-neutral-50 border border-neutral-200 rounded-lg pl-9 pr-3 py-1.5 text-xs text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-black"
+                className="w-full bg-neutral-50 border border-neutral-200 rounded pl-8 pr-3 py-1.5 text-xs text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-400"
               />
             </div>
           </div>
@@ -113,7 +113,7 @@ export default function ClientsView({
           <div className="flex-1 overflow-y-auto divide-y divide-neutral-100">
             {clientsList.length === 0 ? (
               <div className="p-6 text-center text-xs text-neutral-500">
-                No clients found matching your search.
+                No clients found matching search.
               </div>
             ) : (
               clientsList.map((client) => {
@@ -122,17 +122,17 @@ export default function ClientsView({
                   <button
                     key={client.name}
                     onClick={() => setSelectedClientName(client.name)}
-                    className={`w-full text-left p-3.5 transition-colors flex items-center justify-between ${
+                    className={`w-full text-left p-3 transition-colors flex items-center justify-between ${
                       isSelected
-                        ? "bg-neutral-100 border-l-2 border-black"
+                        ? "bg-neutral-100 border-l-2 border-neutral-900 font-semibold"
                         : "hover:bg-neutral-50"
                     }`}
                   >
-                    <div className="space-y-1">
-                      <div className="text-xs font-semibold text-neutral-900 truncate">
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-medium text-neutral-900 truncate">
                         {client.name}
                       </div>
-                      <div className="text-[11px] text-neutral-500 flex items-center gap-2">
+                      <div className="text-[11px] text-neutral-500 flex items-center gap-1.5">
                         <span>{client.inspectionCount} inspections</span>
                         <span>•</span>
                         <span>{client.sites.length} sites</span>
@@ -146,71 +146,70 @@ export default function ClientsView({
           </div>
         </div>
 
-        <div className="hidden md:flex flex-1 flex-col overflow-y-auto p-6 bg-[#fcfcfc]">
+        <div className="hidden md:flex flex-1 flex-col overflow-y-auto p-6 bg-[#f8f9fa]">
           {activeClient ? (
-            <div className="space-y-6 max-w-4xl">
-              <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-neutral-100 border border-neutral-200 flex items-center justify-center text-neutral-700 font-bold">
-                      <Building2 className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h2 className="text-base font-bold text-neutral-900">
-                        {activeClient.name}
-                      </h2>
-                      <p className="text-xs text-neutral-500">
-                        Client Directory Entry
-                      </p>
-                    </div>
+            <div className="space-y-4 max-w-4xl">
+              <div className="bg-white border border-neutral-200 rounded p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded bg-neutral-100 border border-neutral-200 flex items-center justify-center text-neutral-700 font-bold shrink-0">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-neutral-900">
+                      {activeClient.name}
+                    </h2>
+                    <p className="text-xs text-neutral-500">
+                      Client Account Overview
+                    </p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-4 pt-3 border-t border-neutral-100 text-xs">
                   <div>
                     <span className="text-neutral-500 block">Total Inspections</span>
-                    <span className="font-semibold text-neutral-900">
+                    <span className="font-bold text-neutral-900 font-mono">
                       {activeClient.inspectionCount}
                     </span>
                   </div>
                   <div>
                     <span className="text-neutral-500 block">Known Locations</span>
-                    <span className="font-semibold text-neutral-900">
+                    <span className="font-bold text-neutral-900 font-mono">
                       {activeClient.sites.length}
                     </span>
                   </div>
                   <div>
                     <span className="text-neutral-500 block">Total Est. Budget</span>
-                    <span className="font-semibold text-neutral-900">
+                    <span className="font-bold text-neutral-900 font-mono">
                       ₹{activeClient.totalBudget.toLocaleString()}
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <h3 className="text-xs font-bold text-neutral-700 uppercase tracking-wider">
-                  Inspection History ({activeClient.inspections.length})
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold text-neutral-600">
+                  Inspection Records ({activeClient.inspections.length})
                 </h3>
 
-                <div className="space-y-2">
+                <div className="bg-white border border-neutral-200 rounded divide-y divide-neutral-200">
                   {activeClient.inspections.map((rec) => (
                     <div
                       key={rec.id}
                       onClick={() => onOpenModal(rec.data, rec.id)}
-                      className="bg-white border border-neutral-200 hover:border-neutral-400 p-4 rounded-xl cursor-pointer transition-all flex items-center justify-between gap-4"
+                      className="p-3.5 hover:bg-neutral-50 transition-colors cursor-pointer flex items-center justify-between gap-4"
                     >
                       <div className="space-y-1 flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-neutral-900 truncate">
+                          <span className="text-xs font-bold text-neutral-900 truncate">
                             {rec.data.siteAddress || "Site Location"}
                           </span>
+                          <span className="text-xs text-neutral-400">•</span>
                           <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded capitalize shrink-0 ${
+                            className={`text-xs capitalize font-semibold ${
                               rec.data.urgencyLevel === "critical" ||
                               rec.data.urgencyLevel === "high"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-neutral-100 text-neutral-700"
+                                ? "text-red-700"
+                                : "text-neutral-600"
                             }`}
                           >
                             {rec.data.urgencyLevel || "low"} urgency
@@ -219,7 +218,7 @@ export default function ClientsView({
                         <p className="text-xs text-neutral-500 line-clamp-1">
                           {rec.sourceText}
                         </p>
-                        <div className="text-[11px] text-neutral-400">
+                        <div className="text-[11px] text-neutral-400 font-mono">
                           Date: {rec.data.inspectionDate || "N/A"}
                         </div>
                       </div>
@@ -230,7 +229,7 @@ export default function ClientsView({
                             e.stopPropagation();
                             onOpenModal(rec.data, rec.id);
                           }}
-                          className="text-xs font-medium text-neutral-700 hover:text-black border border-neutral-200 px-3 py-1.5 rounded-lg bg-neutral-50 hover:bg-neutral-100"
+                          className="text-xs font-medium text-neutral-900 border border-neutral-200 px-2.5 py-1 rounded bg-white hover:bg-neutral-50"
                         >
                           View Card
                         </button>
@@ -244,7 +243,7 @@ export default function ClientsView({
                                   onDeleteRecord(rec.id);
                                   setDeletingId(null);
                                 }}
-                                className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-red-600 text-white hover:bg-red-700 transition-all shadow-2xs"
+                                className="px-2 py-1 rounded text-xs font-semibold bg-red-600 text-white hover:bg-red-700"
                               >
                                 Confirm
                               </button>
@@ -253,7 +252,7 @@ export default function ClientsView({
                                   e.stopPropagation();
                                   setDeletingId(null);
                                 }}
-                                className="px-2 py-1.5 rounded-lg text-xs font-semibold text-neutral-600 hover:bg-neutral-200"
+                                className="px-2 py-1 rounded text-xs text-neutral-600 hover:bg-neutral-200"
                               >
                                 Cancel
                               </button>
@@ -264,7 +263,7 @@ export default function ClientsView({
                                 e.stopPropagation();
                                 setDeletingId(rec.id);
                               }}
-                              className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-800 border border-red-200 text-xs font-semibold flex items-center gap-1 transition-all"
+                              className="p-1 rounded text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                               title="Delete Record"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -279,7 +278,7 @@ export default function ClientsView({
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center text-xs text-neutral-400">
-              Select a client to view records
+              Select a client account from the list.
             </div>
           )}
         </div>
