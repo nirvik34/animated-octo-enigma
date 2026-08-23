@@ -1,6 +1,6 @@
-import { createOllama } from "ollama-ai-provider";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { LanguageModel } from "ai";
 
 export type ProviderType = "ollama" | "openai" | "google" | "groq";
 
@@ -14,7 +14,7 @@ export interface CustomApiKeys {
 export interface ProviderConfig {
   provider: ProviderType;
   modelName: string;
-  model: any;
+  model: LanguageModel;
 }
 
 export function getLLMProviderConfig(
@@ -158,7 +158,7 @@ export async function checkProviderHealth(
       }
 
       const data = await res.json();
-      const installedModels: string[] = (data.models || []).map((m: any) => m.name);
+      const installedModels: string[] = (data.models || []).map((m: { name: string }) => m.name);
 
       if (installedModels.length === 0) {
         return {
@@ -185,10 +185,11 @@ export async function checkProviderHealth(
         availableModel: fallbackInstalled,
         message: `Model '${targetModel}' not found in Ollama. Auto-switched to installed model '${fallbackInstalled}'.`,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const error = err as Error;
       return {
         ok: false,
-        message: `Local Ollama instance is unreachable at ${rawBaseUrl}. Ensure Ollama is running ('ollama serve'). Error: ${err?.message || err}`,
+        message: `Local Ollama instance is unreachable at ${rawBaseUrl}. Ensure Ollama is running ('ollama serve'). Error: ${error?.message || String(err)}`,
       };
     }
   }

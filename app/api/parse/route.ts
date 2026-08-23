@@ -57,9 +57,10 @@ export async function POST(req: Request) {
     let providerConfig;
     try {
       providerConfig = getLLMProviderConfig(requestedProvider, health.availableModel, apiKeys);
-    } catch (configErr: any) {
+    } catch (configErr) {
+      const err = configErr as Error;
       return NextResponse.json(
-        { error: configErr.message || "Invalid provider configuration." },
+        { error: err.message || "Invalid provider configuration." },
         { status: 400 }
       );
     }
@@ -90,7 +91,7 @@ Rules for Extraction:
       prompt: rawText.trim(),
     });
 
-    const result: any = await Promise.race([parsePromise, timeoutPromise]);
+    const result = (await Promise.race([parsePromise, timeoutPromise])) as { object: unknown };
 
     return NextResponse.json({
       success: true,
@@ -99,14 +100,15 @@ Rules for Extraction:
       modelName,
       fallbackUsed: false,
     });
-  } catch (error: any) {
-    console.warn("LLM Extraction failed or timed out. Falling back to Instant Heuristic Engine:", error.message);
+  } catch (error) {
+    const err = error as Error;
+    console.warn("LLM Extraction failed or timed out. Falling back to Instant Heuristic Engine:", err.message);
 
     if (rawText && rawText.trim()) {
       const fallbackData = fastFallbackParse(rawText);
       const executionMs = Date.now() - startTime;
 
-      const isTimeout = error.message?.includes("timeout");
+      const isTimeout = err.message?.includes("timeout");
       const userWarning = isTimeout
         ? "AI response timed out (8s limit). A basic record was generated using keyword rules. Please review and edit the fields below."
         : "AI model encountered an error during processing. A basic record was generated using keyword rules. Please review and edit the fields below.";
@@ -123,7 +125,7 @@ Rules for Extraction:
 
     return NextResponse.json(
       {
-        error: error.message || "An unexpected error occurred during extraction.",
+        error: err.message || "An unexpected error occurred during extraction.",
       },
       { status: 500 }
     );

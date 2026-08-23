@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import {
   Search,
-  Filter,
   Download,
   ExternalLink,
   Building,
@@ -18,11 +17,10 @@ import {
   FileText,
   Plus,
   Copy,
-  Briefcase,
   Menu,
 } from "lucide-react";
 import { InspectionRecordItem } from "@/lib/sample-records";
-import { SiteInspection, getInspectionRecordStatus, getInspectionMissingFields } from "@/types/inspection";
+import { SiteInspection, getInspectionRecordStatus } from "@/types/inspection";
 
 interface DashboardViewProps {
   records: InspectionRecordItem[];

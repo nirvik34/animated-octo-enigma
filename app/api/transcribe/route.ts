@@ -83,10 +83,11 @@ export async function POST(req: NextRequest) {
       },
       { status: 503 }
     );
-  } catch (error: any) {
-    console.error("Transcription Handler Error:", error);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("Transcription Handler Error:", err);
     return NextResponse.json(
-      { error: error.message || "Failed to process audio recording." },
+      { error: err.message || "Failed to process audio recording." },
       { status: 500 }
     );
   }

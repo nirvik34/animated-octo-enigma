@@ -5,22 +5,15 @@ import {
   X,
   AlertTriangle,
   CheckCircle2,
-  Edit3,
-  Check,
-  Download,
   Briefcase,
   Plus,
   Trash2,
-  Clock,
-  Wrench,
   Send,
 } from "lucide-react";
 import {
   SiteInspection,
   EquipmentNote,
-  UrgencyLevel,
   getInspectionRecordStatus,
-  getInspectionMissingFields,
 } from "@/types/inspection";
 
 interface SiteInspectionModalProps {
@@ -40,14 +33,17 @@ export default function SiteInspectionModal({
   onDispatchWorkOrder,
   showToast,
 }: SiteInspectionModalProps) {
+  const [prevInitial, setPrevInitial] = useState<SiteInspection>(initialInspection);
+  const [prevIsOpen, setPrevIsOpen] = useState<boolean>(isOpen);
   const [inspection, setInspection] = useState<SiteInspection>(initialInspection);
   const [isEditing, setIsEditing] = useState<boolean>(false);
-  const [selectedEquipmentForWorkOrder, setSelectedEquipmentForWorkOrder] = useState<EquipmentNote | null>(null);
 
-  useEffect(() => {
+  if (prevInitial !== initialInspection || prevIsOpen !== isOpen) {
+    setPrevInitial(initialInspection);
+    setPrevIsOpen(isOpen);
     setInspection(initialInspection);
     setIsEditing(false);
-  }, [initialInspection, isOpen]);
+  }
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -109,7 +105,7 @@ export default function SiteInspectionModal({
     else if (showToast) showToast("Work Order dispatched");
   };
 
-  const updateField = (key: keyof SiteInspection, value: any) => {
+  const updateField = (key: keyof SiteInspection, value: unknown) => {
     setInspection((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -389,7 +385,7 @@ export default function SiteInspectionModal({
                           />
                           <select
                             value={item.status}
-                            onChange={(e) => updateEquipment(idx, { ...item, status: e.target.value as any })}
+                            onChange={(e) => updateEquipment(idx, { ...item, status: e.target.value as EquipmentNote["status"] })}
                             className="text-xs font-medium px-2 py-1 rounded border border-neutral-300 outline-none"
                           >
                             <option value="operational">Operational</option>

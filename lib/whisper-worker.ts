@@ -2,13 +2,15 @@ import { pipeline, env } from "@huggingface/transformers";
 
 env.allowLocalModels = false;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let transcriber: any = null;
 let activeDevice: "webgpu" | "wasm" = "wasm";
 
 async function isWebGPUSupported(): Promise<boolean> {
-  if (typeof self === "undefined" || !("gpu" in navigator) || !(navigator as any).gpu) return false;
+  const nav = navigator as unknown as { gpu?: { requestAdapter: () => Promise<unknown> } };
+  if (typeof self === "undefined" || !nav.gpu) return false;
   try {
-    const adapter = await (navigator as any).gpu.requestAdapter();
+    const adapter = await nav.gpu.requestAdapter();
     return !!adapter;
   } catch {
     return false;
@@ -28,14 +30,15 @@ async function initTranscriber() {
       transcriber = await pipeline("automatic-speech-recognition", modelName, {
         device: "webgpu",
         dtype: "fp32",
-        progress_callback: (info: any) => {
+        progress_callback: (info: unknown) => {
           self.postMessage({ type: "progress", info });
         },
       });
       self.postMessage({ type: "ready", device: "webgpu" });
       return transcriber;
-    } catch (err: any) {
-      self.postMessage({ type: "warn", message: "WebGPU failed, falling back to WASM", error: err?.message });
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      self.postMessage({ type: "warn", message: "WebGPU failed, falling back to WASM", error: errMsg });
     }
   }
 
@@ -43,7 +46,7 @@ async function initTranscriber() {
   self.postMessage({ type: "status", status: "initializing", device: "wasm" });
   transcriber = await pipeline("automatic-speech-recognition", modelName, {
     device: "wasm",
-    progress_callback: (info: any) => {
+    progress_callback: (info: unknown) => {
       self.postMessage({ type: "progress", info });
     },
   });
@@ -57,8 +60,9 @@ self.onmessage = async (e: MessageEvent) => {
   if (type === "init") {
     try {
       await initTranscriber();
-    } catch (error: any) {
-      self.postMessage({ type: "error", error: error?.message || "Failed to initialize Whisper model." });
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : "Failed to initialize Whisper model.";
+      self.postMessage({ type: "error", error: errMsg });
     }
     return;
   }
@@ -76,8 +80,8 @@ self.onmessage = async (e: MessageEvent) => {
       });
 
       const text = Array.isArray(output)
-        ? output.map((item) => item.text).join(" ")
-        : output.text || "";
+        ? output.map((item: { text?: string }) => item.text || "").join(" ")
+        : (output as { text?: string }).text || "";
 
       self.postMessage({
         type: "result",
@@ -85,11 +89,12 @@ self.onmessage = async (e: MessageEvent) => {
         text: text.trim(),
         device: activeDevice,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : "Transcription failed.";
       self.postMessage({
         type: "error",
         id,
-        error: error?.message || "Transcription failed.",
+        error: errMsg,
       });
     }
   }

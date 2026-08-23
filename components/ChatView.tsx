@@ -22,7 +22,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { ChatMessage, InputType } from "@/types/chat";
-import { SiteInspection, getInspectionRecordStatus, getInspectionMissingFields } from "@/types/inspection";
+import { SiteInspection, getInspectionRecordStatus } from "@/types/inspection";
 import { InspectionRecordItem } from "@/lib/sample-records";
 import { transcribeAudioBlobLocally } from "@/lib/browser-whisper";
 
@@ -57,6 +57,7 @@ export default function ChatView({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const speechRecognitionRef = useRef<any>(null);
   const speechRecognitionTextRef = useRef<string>("");
 
@@ -66,7 +67,6 @@ export default function ChatView({
 
   useEffect(() => {
     if (isRecordingVoice) {
-      setRecordingSeconds(0);
       timerRef.current = setInterval(() => {
         setRecordingSeconds((prev) => prev + 1);
       }, 1000);
@@ -86,7 +86,9 @@ export default function ChatView({
       if (speechRecognitionRef.current) {
         try {
           speechRecognitionRef.current.stop();
-        } catch (e) {}
+        } catch {
+          // ignore cleanup errors
+        }
       }
     };
   }, []);
@@ -102,18 +104,18 @@ export default function ChatView({
       streamRef.current = stream;
 
       speechRecognitionTextRef.current = "";
-      const SpeechRecognition =
-        typeof window !== "undefined"
-          ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-          : null;
+      const windowObj = window as unknown as Record<string, unknown>;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const SpeechRecognitionClass = (windowObj.SpeechRecognition || windowObj.webkitSpeechRecognition) as any;
 
-      if (SpeechRecognition) {
+      if (SpeechRecognitionClass) {
         try {
-          const recognition = new SpeechRecognition();
+          const recognition = new SpeechRecognitionClass();
           recognition.continuous = true;
           recognition.interimResults = true;
           recognition.lang = "en-US";
 
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           recognition.onresult = (event: any) => {
             let currentTranscript = "";
             for (let i = 0; i < event.results.length; i++) {
@@ -122,6 +124,7 @@ export default function ChatView({
             speechRecognitionTextRef.current = currentTranscript.trim();
           };
 
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           recognition.onerror = (event: any) => {
             console.warn("SpeechRecognition error:", event.error);
           };
@@ -178,7 +181,7 @@ export default function ChatView({
               transcript = await transcribeAudioBlobLocally(audioBlob, (prog) => {
                 setTranscriptionStatus(prog.message || "Transcribing audio locally...");
               });
-            } catch (localErr: any) {
+            } catch (localErr: unknown) {
               console.warn("Local whisper transcription failed, falling back to server API:", localErr);
               setTranscriptionStatus("Transcribing via server...");
 
@@ -206,9 +209,10 @@ export default function ChatView({
           } else {
             showToast("No speech detected in recorded audio.");
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.error("Transcription error:", err);
-          showToast(`Transcription error: ${err.message || err}`);
+          const msg = err instanceof Error ? err.message : String(err);
+          showToast(`Transcription error: ${msg}`);
         } finally {
           setIsTranscribing(false);
           setTranscriptionStatus("");
@@ -216,9 +220,10 @@ export default function ChatView({
       };
 
       mediaRecorder.start(200);
+      setRecordingSeconds(0);
       setIsRecordingVoice(true);
       showToast("Recording voice note...");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to access microphone:", err);
       showToast("Microphone access denied. Please check browser permissions.");
     }
@@ -233,7 +238,9 @@ export default function ChatView({
     if (speechRecognitionRef.current) {
       try {
         speechRecognitionRef.current.stop();
-      } catch (e) {}
+      } catch {
+        // ignore
+      }
       speechRecognitionRef.current = null;
     }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {

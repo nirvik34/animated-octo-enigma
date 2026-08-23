@@ -7,7 +7,6 @@ import {
   Users,
   Settings,
   X,
-  Building2,
 } from "lucide-react";
 import { ProviderType } from "@/lib/llm-provider";
 
@@ -17,8 +16,8 @@ interface SidebarProps {
   activeTab: TabType;
   onTabChange: (tab: TabType) => void;
   recordCount: number;
-  provider: ProviderType;
-  onProviderChange: (p: ProviderType) => void;
+  provider?: ProviderType;
+  onProviderChange?: (p: ProviderType) => void;
   onOpenSettings: () => void;
   onNewInspection?: () => void;
   isOpenMobile?: boolean;
@@ -29,8 +28,6 @@ export default function Sidebar({
   activeTab,
   onTabChange,
   recordCount,
-  provider,
-  onProviderChange,
   onOpenSettings,
   onNewInspection,
   isOpenMobile = false,

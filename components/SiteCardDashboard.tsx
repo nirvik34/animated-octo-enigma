@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Sidebar, { TabType } from "@/components/Sidebar";
 import ChatView from "@/components/ChatView";
 import DashboardView from "@/components/DashboardView";
@@ -26,18 +26,16 @@ export default function SiteCardDashboard() {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
-  const [savedKeys, setSavedKeys] = useState<CustomApiKeys>({});
-
-  useEffect(() => {
+  const [savedKeys, setSavedKeys] = useState<CustomApiKeys>(() => {
+    if (typeof window === "undefined") return {};
     try {
       const stored = localStorage.getItem("saniti_api_keys");
-      if (stored) {
-        setSavedKeys(JSON.parse(stored));
-      }
+      return stored ? JSON.parse(stored) : {};
     } catch (e) {
       console.error("Failed to parse saved API keys from localStorage:", e);
+      return {};
     }
-  }, []);
+  });
 
   const handleSaveKeys = (keys: CustomApiKeys) => {
     setSavedKeys(keys);
@@ -135,18 +133,19 @@ export default function SiteCardDashboard() {
 
       setRecords((prev) => [newRecordItem, ...prev]);
       showToast(`New record created for ${parsedData.clientName || "Client"}!`);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred.";
       const errorMsgId = `error-${Date.now()}`;
       setChatMessages((prev) => [
         ...prev,
         {
           id: errorMsgId,
           sender: "assistant",
-          text: `Extraction error: ${err.message || "An unexpected error occurred."}`,
+          text: `Extraction error: ${errorMessage}`,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         },
       ]);
-      showToast(`Error: ${err.message}`);
+      showToast(`Error: ${errorMessage}`);
     } finally {
       setLoading(false);
     }

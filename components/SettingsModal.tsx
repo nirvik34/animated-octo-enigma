@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { X, Key, Eye, EyeOff, Check, Trash2, Server, ShieldCheck, Cpu } from "lucide-react";
+import React, { useState } from "react";
+import { X, Key, Eye, EyeOff, Check, Trash2, ShieldCheck } from "lucide-react";
 
 export interface CustomApiKeys {
   openaiApiKey?: string;
@@ -25,23 +25,28 @@ export default function SettingsModal({
   onSaveKeys,
   showToast,
 }: SettingsModalProps) {
-  const [openaiKey, setOpenaiKey] = useState<string>("");
-  const [googleKey, setGoogleKey] = useState<string>("");
-  const [groqKey, setGroqKey] = useState<string>("");
-  const [ollamaUrl, setOllamaUrl] = useState<string>("http://localhost:11434");
+  const [prevIsOpen, setPrevIsOpen] = useState<boolean>(isOpen);
+  const [prevSavedKeys, setPrevSavedKeys] = useState<CustomApiKeys>(savedKeys);
+
+  const [openaiKey, setOpenaiKey] = useState<string>(savedKeys.openaiApiKey || "");
+  const [googleKey, setGoogleKey] = useState<string>(savedKeys.googleApiKey || "");
+  const [groqKey, setGroqKey] = useState<string>(savedKeys.groqApiKey || "");
+  const [ollamaUrl, setOllamaUrl] = useState<string>(savedKeys.ollamaBaseUrl || "http://localhost:11434");
 
   const [showOpenai, setShowOpenai] = useState<boolean>(false);
   const [showGoogle, setShowGoogle] = useState<boolean>(false);
   const [showGroq, setShowGroq] = useState<boolean>(false);
 
-  useEffect(() => {
+  if (prevIsOpen !== isOpen || prevSavedKeys !== savedKeys) {
+    setPrevIsOpen(isOpen);
+    setPrevSavedKeys(savedKeys);
     if (isOpen) {
       setOpenaiKey(savedKeys.openaiApiKey || "");
       setGoogleKey(savedKeys.googleApiKey || "");
       setGroqKey(savedKeys.groqApiKey || "");
       setOllamaUrl(savedKeys.ollamaBaseUrl || "http://localhost:11434");
     }
-  }, [isOpen, savedKeys]);
+  }
 
   if (!isOpen) return null;
 

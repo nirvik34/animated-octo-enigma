@@ -2,11 +2,8 @@
 
 import React, { useState } from "react";
 import {
-  Users,
   Search,
   Building2,
-  MapPin,
-  FileText,
   ChevronRight,
   Menu,
 } from "lucide-react";

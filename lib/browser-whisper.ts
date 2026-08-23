@@ -48,7 +48,8 @@ export async function transcribeAudioBlobLocally(
 
         switch (p.stage) {
           case "loading": {
-            const fileName = (p as any).file || (p as any).name || "model_component";
+            const pObj = p as unknown as Record<string, unknown>;
+            const fileName = (typeof pObj.file === "string" ? pObj.file : undefined) || (typeof pObj.name === "string" ? pObj.name : undefined) || "model_component";
             fileProgressMap.set(fileName, p.progress);
 
             let sum = 0;
