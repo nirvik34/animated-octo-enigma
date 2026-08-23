@@ -6,12 +6,17 @@ import {
   checkProviderHealth,
   ProviderType,
 } from "@/lib/llm-provider";
+import { fastFallbackParse } from "@/lib/fallback-parser";
 
 export async function POST(req: Request) {
+  const startTime = Date.now();
+  let rawText = "";
+
   try {
     const body = await req.json().catch(() => ({}));
-    const rawText = body.rawText;
-    const providerOverride = body.providerOverride as ProviderType | undefined;
+    rawText = body.rawText || "";
+    const providerOverride = body.providerOverride as ProviderType | "fallback" | undefined;
+    const forceFallback = body.forceFallback === true || providerOverride === "fallback";
 
     if (!rawText || typeof rawText !== "string" || !rawText.trim()) {
       return NextResponse.json(
@@ -20,9 +25,22 @@ export async function POST(req: Request) {
       );
     }
 
+    // Direct Instant Fallback Mode (< 10ms execution)
+    if (forceFallback) {
+      const fallbackData = fastFallbackParse(rawText);
+      const executionMs = Date.now() - startTime;
+      return NextResponse.json({
+        success: true,
+        data: fallbackData,
+        provider: "fallback",
+        modelName: `Instant Heuristic Engine (${executionMs}ms)`,
+        fallbackUsed: true,
+      });
+    }
+
     let providerConfig;
     try {
-      providerConfig = getLLMProviderConfig(providerOverride);
+      providerConfig = getLLMProviderConfig(providerOverride as ProviderType);
     } catch (configErr: any) {
       return NextResponse.json(
         { error: configErr.message || "Invalid provider configuration." },
@@ -34,14 +52,17 @@ export async function POST(req: Request) {
 
     const health = await checkProviderHealth(provider);
     if (!health.ok) {
-      return NextResponse.json(
-        {
-          error: `Provider '${provider}' health check failed: ${health.message}`,
-          provider,
-          modelName,
-        },
-        { status: 503 }
-      );
+      // Automatic failover to Heuristic Fallback when provider health check fails
+      const fallbackData = fastFallbackParse(rawText);
+      const executionMs = Date.now() - startTime;
+      return NextResponse.json({
+        success: true,
+        data: fallbackData,
+        provider: `${provider} (Failed -> Fallback)`,
+        modelName: `Instant Heuristic Engine (${executionMs}ms)`,
+        fallbackUsed: true,
+        warning: `Primary provider '${provider}' unavailable (${health.message}). Automatically recovered using Fast Fallback Engine.`,
+      });
     }
 
     const systemPrompt = `You are a world-class industrial site inspection analyst and structured data extractor.
@@ -57,39 +78,51 @@ Rules for Extraction:
 7. Key Observations: Extract distinct factual findings, safety issues, or physical conditions as an array of strings.
 8. Next Steps: Extract recommended follow-up actions, maintenance orders, or scheduling items as an array of clear actionable strings.`;
 
-    const result = await generateObject({
+    // LLM with 8 second timeout + automatic fallback recovery
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("LLM processing timeout exceeded (8s)")), 8000)
+    );
+
+    const parsePromise = generateObject({
       model,
       schema: SiteInspectionSchema,
       system: systemPrompt,
       prompt: rawText.trim(),
     });
 
+    const result: any = await Promise.race([parsePromise, timeoutPromise]);
+
     return NextResponse.json({
       success: true,
       data: result.object,
       provider,
       modelName,
+      fallbackUsed: false,
     });
   } catch (error: any) {
-    console.error("API Parse Route Error:", error);
+    console.warn("LLM Extraction failed or timed out. Falling back to Instant Heuristic Engine:", error.message);
 
-    let errorMessage = error.message || "An unexpected error occurred during AI extraction.";
-    let statusCode = 500;
+    // High-speed fallback recovery
+    if (rawText && rawText.trim()) {
+      const fallbackData = fastFallbackParse(rawText);
+      const executionMs = Date.now() - startTime;
 
-    if (error.code === "ECONNREFUSED" || errorMessage.includes("ECONNREFUSED") || errorMessage.includes("connect ECONNREFUSED")) {
-      errorMessage = "Could not connect to local Ollama service. Ensure Ollama is running on http://localhost:11434 ('ollama serve').";
-      statusCode = 503;
-    } else if (error.name === "AbortError" || errorMessage.includes("timeout") || errorMessage.includes("ETIMEDOUT")) {
-      errorMessage = "The parsing request timed out. Local Ollama processing may require smaller prompt size or GPU acceleration.";
-      statusCode = 504;
+      return NextResponse.json({
+        success: true,
+        data: fallbackData,
+        provider: "fallback",
+        modelName: `Instant Heuristic Engine (${executionMs}ms)`,
+        fallbackUsed: true,
+        warning: `LLM parsing failed or timed out (${error.message}). Recovered using Instant Heuristic Fallback Engine.`,
+      });
     }
 
     return NextResponse.json(
       {
-        error: errorMessage,
-        details: process.env.NODE_ENV === "development" ? String(error) : undefined,
+        error: error.message || "An unexpected error occurred during extraction.",
       },
-      { status: statusCode }
+      { status: 500 }
     );
   }
 }
+

@@ -43,6 +43,18 @@ export const SiteInspectionSchema = z.object({
 
 export type SiteInspection = z.infer<typeof SiteInspectionSchema>;
 
+export const EMPTY_SITE_INSPECTION: SiteInspection = {
+  clientName: "",
+  siteAddress: "",
+  inspectionDate: new Date().toISOString().split("T")[0],
+  budgetEstimate: null,
+  currency: "USD",
+  urgencyLevel: "medium",
+  equipmentNotes: [],
+  keyObservations: [],
+  nextSteps: [],
+};
+
 export const DEFAULT_SITE_INSPECTION: SiteInspection = {
   clientName: "Apex Manufacturing Solutions",
   siteAddress: "1040 Industrial Parkway, Building B, Austin, TX 78758",
@@ -78,3 +90,4 @@ export const DEFAULT_SITE_INSPECTION: SiteInspection = {
     "Notify facility manager regarding South Bay drainage clearing",
   ],
 };
+
