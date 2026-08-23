@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   Send,
   Mic,
-  MicOff,
+  Square,
   Sparkles,
   Download,
   Copy,
@@ -12,18 +12,16 @@ import {
   RefreshCw,
   AlertTriangle,
   CheckCircle2,
-  FileText,
-  Building,
   Calendar,
   DollarSign,
   MapPin,
   Wrench,
-  ShieldAlert,
+  Volume2,
+  Loader2,
   Zap,
-  Volume2
 } from "lucide-react";
 import { ChatMessage, InputType } from "@/types/chat";
-import { SiteInspection, EquipmentNote } from "@/types/inspection";
+import { SiteInspection } from "@/types/inspection";
 import { ProviderType } from "@/lib/llm-provider";
 
 interface ChatViewProps {
@@ -35,7 +33,6 @@ interface ChatViewProps {
   showToast: (msg: string) => void;
 }
 
-
 export default function ChatView({
   messages,
   onSendMessage,
@@ -46,22 +43,18 @@ export default function ChatView({
 }: ChatViewProps) {
   const [inputText, setInputText] = useState<string>("");
   const [isRecordingVoice, setIsRecordingVoice] = useState<boolean>(false);
-  const isRecordingVoiceRef = useRef<boolean>(false);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
-  const [modelLoadingPct, setModelLoadingPct] = useState<number | null>(null);
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
-  const isTranscribingRef = useRef<boolean>(false);
-  const [recordingEngine, setRecordingEngine] = useState<"whisper_webgpu" | "whisper_wasm" | "speech_api" | null>(null);
+  const [transcriptionStatus, setTranscriptionStatus] = useState<string>("");
+  const [transcriptionProgress, setTranscriptionProgress] = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const sliceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const initialTextRef = useRef<string>("");
   const audioChunksRef = useRef<Blob[]>([]);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const speechRecognitionRef = useRef<any>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -81,7 +74,7 @@ export default function ChatView({
     };
   }, [isRecordingVoice]);
 
-  const startWhisperRecording = async (): Promise<boolean> => {
+  const startRecording = async (): Promise<boolean> => {
     try {
       if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
         showToast("⚠️ Microphone recording is not supported in this browser environment.");
@@ -119,52 +112,9 @@ export default function ChatView({
         }
       };
 
-      mediaRecorder.start(1000);
-
-      isRecordingVoiceRef.current = true;
+      mediaRecorder.start(250);
       setIsRecordingVoice(true);
-
-      showToast("⚡ Initializing local Whisper AI model...");
-      import("@/lib/client-whisper").then(({ getWhisperTranscriber, getActiveDevice }) => {
-        getWhisperTranscriber((info) => {
-          if (info.status === "progress" && info.loaded && info.total) {
-            const pct = Math.round((info.loaded / info.total) * 100);
-            setModelLoadingPct(pct);
-          }
-        }).then(() => {
-          setModelLoadingPct(null);
-          const device = getActiveDevice();
-          setRecordingEngine(device === "webgpu" ? "whisper_webgpu" : "whisper_wasm");
-          showToast(`🎙 Local Whisper AI (${device.toUpperCase()}) active! Dictating into text box.`);
-        }).catch((err) => {
-          console.warn("Whisper model loading notice:", err);
-        });
-      });
-
-      sliceTimerRef.current = setInterval(async () => {
-        if (!isRecordingVoiceRef.current || audioChunksRef.current.length === 0 || isTranscribingRef.current) return;
-
-        try {
-          isTranscribingRef.current = true;
-          setIsTranscribing(true);
-
-          const currentBlob = new Blob(audioChunksRef.current, {
-            type: mediaRecorder.mimeType || "audio/webm",
-          });
-          if (currentBlob.size < 1000) return;
-
-          const { transcribeAudioClient } = await import("@/lib/client-whisper");
-          const partialText = await transcribeAudioClient(currentBlob);
-          if (partialText && isRecordingVoiceRef.current) {
-            setInputText(initialTextRef.current + partialText);
-          }
-        } catch (err) {
-          console.warn("Interim Whisper dictation error:", err);
-        } finally {
-          isTranscribingRef.current = false;
-          setIsTranscribing(false);
-        }
-      }, 3500);
+      showToast("🎙 Recording voice note... Click 'Stop & Transcribe' when finished.");
 
       return true;
     } catch (err: any) {
@@ -178,130 +128,12 @@ export default function ChatView({
     }
   };
 
-  const startBrowserSpeechRecognition = () => {
-    const SpeechRecognition =
-      typeof window !== "undefined" &&
-      ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
-
-    if (!SpeechRecognition) {
-      startWhisperRecording();
-      return;
-    }
-
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = "en-US";
-
-      const currentInput = inputText;
-      initialTextRef.current = currentInput
-        ? currentInput + (currentInput.endsWith(" ") || currentInput.endsWith("\n") ? "" : " ")
-        : "";
-
-      let isFallingBack = false;
-
-      recognition.onresult = (event: any) => {
-        let finalText = "";
-        let interimText = "";
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalText += transcript;
-          } else {
-            interimText += transcript;
-          }
-        }
-
-        if (finalText) {
-          initialTextRef.current += finalText + (finalText.endsWith(" ") ? "" : " ");
-        }
-
-        setInputText(initialTextRef.current + interimText);
-      };
-
-      recognition.onerror = (event: any) => {
-        console.warn("Speech recognition error:", event.error);
-        if (
-          event.error === "network" ||
-          event.error === "aborted" ||
-          event.error === "audio-capture" ||
-          event.error === "service-not-allowed"
-        ) {
-          if (!isFallingBack) {
-            isFallingBack = true;
-            console.log("Switching seamlessly to local Whisper AI fallback...");
-            speechRecognitionRef.current = null;
-            try {
-              recognition.stop();
-            } catch {}
-            startWhisperRecording();
-          }
-        } else if (event.error === "not-allowed" || event.error === "permission-denied") {
-          showToast("⚠️ Microphone permission denied in browser settings.");
-          stopRecording();
-        } else if (event.error !== "no-speech") {
-          showToast(`Voice notice: ${event.error}`);
-          stopRecording();
-        }
-      };
-
-      recognition.onend = () => {
-        if (isFallingBack) return;
-        if (isRecordingVoiceRef.current && speechRecognitionRef.current) {
-          try {
-            recognition.start();
-          } catch {
-            stopRecording();
-          }
-        } else {
-          stopRecording();
-        }
-      };
-
-      recognition.start();
-      speechRecognitionRef.current = recognition;
-      isRecordingVoiceRef.current = true;
-      setIsRecordingVoice(true);
-      setRecordingEngine("speech_api");
-      showToast("🎙 Live Voice Typing active! Speak into microphone.");
-    } catch (e) {
-      console.warn("Speech recognition failed to initialize, switching to local Whisper:", e);
-      startWhisperRecording();
-    }
-  };
-
-  const startRecording = async () => {
-    const SpeechRecognition =
-      typeof window !== "undefined" &&
-      ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
-
-    if (SpeechRecognition) {
-      startBrowserSpeechRecognition();
-    } else {
-      await startWhisperRecording();
-    }
-  };
-
   const stopRecording = async () => {
-    isRecordingVoiceRef.current = false;
     setIsRecordingVoice(false);
-    setModelLoadingPct(null);
 
-    if (sliceTimerRef.current) {
-      clearInterval(sliceTimerRef.current);
-      sliceTimerRef.current = null;
-    }
-
-    if (speechRecognitionRef.current) {
-      const rec = speechRecognitionRef.current;
-      speechRecognitionRef.current = null;
-      try {
-        rec.onend = null;
-        rec.onerror = null;
-        rec.stop();
-      } catch {}
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
 
     const recorder = mediaRecorderRef.current;
@@ -319,33 +151,48 @@ export default function ChatView({
       mediaStreamRef.current = null;
     }
 
-    setRecordingEngine(null);
-
     const chunks = [...audioChunksRef.current];
     audioChunksRef.current = [];
 
     if (chunks.length > 0) {
-      try {
-        const finalBlob = new Blob(chunks, {
-          type: recorder?.mimeType || "audio/webm",
-        });
-        if (finalBlob.size > 1000) {
-          showToast("⏳ Finalizing transcription...");
-          isTranscribingRef.current = true;
-          setIsTranscribing(true);
+      const finalBlob = new Blob(chunks, {
+        type: recorder?.mimeType || "audio/webm",
+      });
 
-          const { transcribeAudioClient } = await import("@/lib/client-whisper");
-          const finalText = await transcribeAudioClient(finalBlob);
-          if (finalText) {
-            setInputText(initialTextRef.current + finalText);
-            showToast("✨ Voice dictation complete!");
-          }
+      if (finalBlob.size < 1000) {
+        showToast("⚠️ Voice note was too short. Please try speaking longer.");
+        return;
+      }
+
+      setIsTranscribing(true);
+      setTranscriptionStatus("Initializing local Whisper Tiny model...");
+      setTranscriptionProgress(0);
+      showToast("⏳ Transcribing voice note locally in browser (WASM/WebGPU)...");
+
+      try {
+        const { transcribeAudioBlobLocally } = await import("@/lib/browser-whisper");
+        const transcribedText = await transcribeAudioBlobLocally(finalBlob, (progress) => {
+          setTranscriptionStatus(progress.message || "Transcribing audio locally...");
+          setTranscriptionProgress(Math.round(progress.progress * 100));
+        });
+
+        if (transcribedText) {
+          setInputText((prev) => {
+            const base = initialTextRef.current || prev;
+            const prefix = base ? (base.endsWith(" ") || base.endsWith("\n") ? base : base + " ") : "";
+            return prefix + transcribedText;
+          });
+          showToast("✨ Voice note transcribed successfully!");
+        } else {
+          showToast("⚠️ No speech detected in recorded audio.");
         }
-      } catch (err) {
-        console.warn("Final Whisper transcription error:", err);
+      } catch (err: any) {
+        console.error("Local Whisper transcription error:", err);
+        showToast(`⚠️ Local transcription error: ${err.message || "Failed to process audio"}`);
       } finally {
-        isTranscribingRef.current = false;
         setIsTranscribing(false);
+        setTranscriptionStatus("");
+        setTranscriptionProgress(null);
       }
     }
   };
@@ -353,13 +200,13 @@ export default function ChatView({
   const toggleVoiceRecording = () => {
     if (isRecordingVoice) {
       stopRecording();
-    } else {
+    } else if (!isTranscribing) {
       startRecording();
     }
   };
 
   const handleSend = () => {
-    if (!inputText.trim() || loading) return;
+    if (!inputText.trim() || loading || isTranscribing) return;
     if (isRecordingVoice) {
       stopRecording();
     }
@@ -450,16 +297,38 @@ export default function ChatView({
           <div className="flex items-center gap-3">
             <div className="w-3 h-3 rounded-full bg-red-600 animate-ping" />
             <span className="text-xs font-bold text-red-900">
-              🎙 Live Voice Typing ({recordingSeconds}s)... Speak into microphone to type text in real time.
+              🎙 Recording Voice Note ({recordingSeconds}s)... Speak clearly into your microphone.
             </span>
           </div>
           <button
             type="button"
             onClick={toggleVoiceRecording}
-            className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 shadow-sm"
+            className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 shadow-sm flex items-center gap-1.5"
           >
-            Stop Dictating
+            <Square className="w-3 h-3 fill-current" />
+            <span>Stop & Transcribe</span>
           </button>
+        </div>
+      )}
+
+      {isTranscribing && (
+        <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
+            <div>
+              <span className="text-xs font-bold text-blue-900 block">
+                ⚡ Local Whisper AI (Browser WASM/WebGPU)
+              </span>
+              <span className="text-[11px] text-blue-700">
+                {transcriptionStatus || "Transcribing audio locally..."}
+              </span>
+            </div>
+          </div>
+          {transcriptionProgress !== null && (
+            <div className="text-xs font-mono font-bold text-blue-800 bg-blue-100 px-2.5 py-1 rounded-full border border-blue-300">
+              {transcriptionProgress}%
+            </div>
+          )}
         </div>
       )}
 
@@ -468,9 +337,10 @@ export default function ChatView({
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={handleKeyDown}
+          disabled={isTranscribing}
           rows={centered ? 4 : 3}
-          placeholder="Type, paste inspection text, or click 'Live Voice Typing' to dictate into text box..."
-          className="w-full bg-transparent p-1.5 text-sm sm:text-base font-mono leading-relaxed text-neutral-900 placeholder:text-neutral-400 outline-none resize-none"
+          placeholder="Type, paste inspection text, or click 'Record Voice Note' to transcribe audio locally..."
+          className="w-full bg-transparent p-1.5 text-sm sm:text-base font-mono leading-relaxed text-neutral-900 placeholder:text-neutral-400 outline-none resize-none disabled:opacity-50"
         />
 
         <div className="flex items-center justify-between pt-2 border-t border-neutral-100 px-1">
@@ -478,20 +348,29 @@ export default function ChatView({
             <button
               type="button"
               onClick={toggleVoiceRecording}
+              disabled={isTranscribing}
               className={`p-2 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 isRecordingVoice
-                  ? "bg-red-600 text-white animate-bounce"
+                  ? "bg-red-600 text-white animate-pulse"
+                  : isTranscribing
+                  ? "bg-neutral-100 text-neutral-400 cursor-not-allowed opacity-60"
                   : "bg-neutral-100 border border-neutral-200 text-neutral-700 hover:bg-neutral-200"
               }`}
-              title="Live Voice Dictation (Client-side)"
+              title="Record voice note for local Whisper AI transcription"
             >
               {isRecordingVoice ? (
-                <MicOff className="w-4 h-4 text-white" />
+                <Square className="w-3.5 h-3.5 fill-current" />
+              ) : isTranscribing ? (
+                <Loader2 className="w-4 h-4 animate-spin text-neutral-500" />
               ) : (
                 <Mic className="w-4 h-4 text-red-500" />
               )}
               <span className="hidden sm:inline">
-                {isRecordingVoice ? "Stop Dictating" : "Live Voice Typing"}
+                {isRecordingVoice
+                  ? "Stop & Transcribe"
+                  : isTranscribing
+                  ? "Transcribing..."
+                  : "Record Voice Note"}
               </span>
             </button>
           </div>
@@ -499,9 +378,9 @@ export default function ChatView({
           <div className="flex items-center gap-2">
             <button
               onClick={handleSend}
-              disabled={loading || !inputText.trim()}
+              disabled={loading || !inputText.trim() || isTranscribing}
               className={`px-5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-                loading || !inputText.trim()
+                loading || !inputText.trim() || isTranscribing
                   ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                   : "bg-black text-white hover:bg-neutral-800 shadow-md active:scale-95"
               }`}
